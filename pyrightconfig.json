@@ -1,6 +1,6 @@
 {
   "include": ["notebooks", "scripts"],
-  "exclude": ["**/__pycache__", "**/.ipynb_checkpoints"],
+  "exclude": ["**/__pycache__", "**/.ipynb_checkpoints", "**/node_modules", "**/.*", ".venv"],
   "pythonVersion": "3.11",
   "pythonPlatform": "Darwin",
   "reportMissingTypeStubs": false,
