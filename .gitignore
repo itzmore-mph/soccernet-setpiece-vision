@@ -1,0 +1,39 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+
+# Jupyter
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Conda / venv (env lives in py311-dev outside repo)
+.venv/
+venv/
+
+# Data — never commit. Lives on external SSD.
+/Volumes/
+data/raw/
+data/interim/
+
+# Large model weights (auto-downloaded to ~/.cache)
+*.pt
+*.onnx
+
+# Outputs: keep parquet + figures (small, reproducible-from-notebooks)
+# Add specific ignores here if any output gets large.

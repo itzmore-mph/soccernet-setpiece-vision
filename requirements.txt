@@ -1,0 +1,11 @@
+jupyter
+statsbombpy
+mplsoccer
+pandas
+numpy
+matplotlib
+seaborn
+scipy
+scikit-learn
+pyarrow
+python-dotenv
