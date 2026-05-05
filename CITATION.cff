@@ -49,39 +49,6 @@ references:
       name: "Seattle, WA, USA"
 
   - type: software
-    title: "TrackLab"
-    authors:
-      - family-names: Joos
-        given-names: Victor
-      - family-names: Somers
-        given-names: Vladimir
-      - family-names: Standaert
-        given-names: Baptiste
-    year: 2024
-    repository-code: "https://github.com/TrackingLaboratory/tracklab"
-
-  - type: conference-paper
-    title: "Multi-task Learning for Joint Re-identification, Team Affiliation, and Role Classification for Sports Visual Tracking"
-    authors:
-      - family-names: Mansourian
-        given-names: Amir M.
-      - family-names: Somers
-        given-names: Vladimir
-      - family-names: De Vleeschouwer
-        given-names: Christophe
-      - family-names: Kasaei
-        given-names: Shohreh
-    collection-title: "Proceedings of the 6th International Workshop on Multimedia Content Analysis in Sports (MMSports)"
-    pages: "103-112"
-    year: 2023
-    month: 10
-    publisher:
-      name: ACM
-    location:
-      name: "Ottawa, Canada"
-    doi: "10.1145/3606038.3616172"
-
-  - type: software
     title: "Friends of Tracking: Pitch Control implementation"
     authors:
       - family-names: Shaw

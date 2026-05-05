@@ -99,34 +99,6 @@ This project builds on the following works. See [CITATION.cff](CITATION.cff) for
 }
 ```
 
-### TrackLab
-
-```bibtex
-@misc{Joos2024Tracklab,
-  title        = {{TrackLab}},
-  author       = {Joos, Victor and Somers, Vladimir and Standaert, Baptiste},
-  journal      = {GitHub repository},
-  year         = {2024},
-  howpublished = {\url{https://github.com/TrackingLaboratory/tracklab}},
-}
-```
-
-### PRTReid — Multi-task Re-identification and Team Affiliation
-
-```bibtex
-@inproceedings{Mansourian2023Multitask,
-  title     = {Multi-task Learning for Joint Re-identification, Team Affiliation, and Role Classification for Sports Visual Tracking},
-  author    = {Mansourian, Amir M. and Somers, Vladimir and De Vleeschouwer, Christophe and Kasaei, Shohreh},
-  booktitle = {Proceedings of the 6th International Workshop on Multimedia Content Analysis in Sports (MMSports)},
-  pages     = {103--112},
-  month     = {Oct},
-  year      = {2023},
-  publisher = {ACM},
-  address   = {Ottawa, Canada},
-  doi       = {10.1145/3606038.3616172},
-}
-```
-
 ### Pitch Control model
 
 Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`. https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking
