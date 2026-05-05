@@ -59,15 +59,33 @@ Compare Pitch Control distributions across comparable set-piece types.
 | Scripts | ./scripts |
 | SoccerNet data | /Volumes/MPH-ExternalStorage/soccernet-gsr |
 
-## Repo State (as of 2026-05-04)
-Only `scripts/` and `requirements.txt` exist. `notebooks/`, `outputs/`, `.env` not yet scaffolded. Before running any notebook:
+## Repo State (as of 2026-05-05)
+All five notebooks exist and have been executed. Outputs directory is populated. Pipeline is functionally complete through validation.
 
-```bash
-mkdir -p notebooks outputs
-test -d /Volumes/MPH-ExternalStorage/soccernet-gsr || echo "WARN: SSD not mounted"
-test -f .env || echo "SOCCERNET_PASSWORD=..." > .env  # then fill manually
-pip show setpiece-pipeline broadcast-to-tactics  # verify editable installs
-```
+**Notebooks:**
+- `notebooks/01_business_and_data_understanding.ipynb` — complete
+- `notebooks/02_data_preparation_and_pipeline.ipynb` — complete
+- `notebooks/03_pitch_control.ipynb` — complete
+- `notebooks/04_evaluation_and_validation.ipynb` — complete
+- `notebooks/05_visualizations.ipynb` — complete (animated PC + minimap + broadcast stills)
+
+**Scripts:**
+- `scripts/download_soccernet.py` — SoccerNet GSR download (idempotent)
+- `scripts/dump_ball_positions.py` — exports ball positions to Parquet for offline nb03/nb04 runs
+
+**Outputs (all Parquet):**
+- `outputs/ball_positions.parquet`
+- `outputs/detections_gt.parquet`
+- `outputs/detections_pipeline.parquet`
+- `outputs/pipeline_diagnostics.parquet`
+- `outputs/pitch_control.parquet`
+- `outputs/setpieces.parquet`
+- `outputs/validation_paired.parquet`
+- `outputs/validation_summary.parquet`
+
+**Figures** (`outputs/figures/`): 9 static PNGs + 2 animated GIFs (corner, direct free-kick).
+
+**Next milestone:** written thesis/report ahead of 30 June 2026 deadline.
 
 `scripts/download_soccernet.py` downloads task `gamestate-2024`, splits `[train, valid, test, challenge]`. Idempotent: skips splits already on disk (zip >0B or extracted dir non-empty). Honors `SOCCERNET_LOCAL_DIR` env var; defaults to SSD path.
 
