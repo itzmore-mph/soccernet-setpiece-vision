@@ -41,6 +41,7 @@ soccernet-setpiece-vision/
 │   └── dump_ball_positions.py                     # Export ball positions for offline runs
 ├── CITATION.cff
 ├── CLAUDE.md
+├── LICENSE
 ├── report.md
 └── requirements.txt
 ```
@@ -141,4 +142,4 @@ Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Re
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
