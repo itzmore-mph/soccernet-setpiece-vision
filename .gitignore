@@ -21,6 +21,7 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # Conda / venv (env lives in py311-dev outside repo)
 .venv/
