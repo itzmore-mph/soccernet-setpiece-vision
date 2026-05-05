@@ -51,9 +51,9 @@ Submission Deadline: 30 June 2026
 
 **Solution.** This project delivers a reproducible, open-source computer vision pipeline that derives Pitch Control from broadcast video, requiring no proprietary tracking hardware. The pipeline detects players using a pre-trained object detector (YOLOv8x), assigns team labels via jersey colour clustering (KMeans on HSV values), transforms pixel coordinates to metric pitch coordinates via homography, and computes attacking Pitch Control using Laurie Shaw's time-to-intercept model. The focus is set pieces (corners and direct free kicks), where broadcast cameras are near-static and all relevant players are typically in frame.
 
-**Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations on 33 clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset. Validation is distributional: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap.
+**Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations. Of 33 candidate clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset, 20 were processable after homography filtering (13 excluded due to insufficient pitch-line coverage). Validation is distributional: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap.
 
-**Results.** The pipeline preserves the most operationally relevant signal, control at the ball (`pc_at_ball`), with near-equivalent fidelity to ground truth (KS p=0.061, histogram overlap 0.86, Pearson r=0.32, MAE=0.12). Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) show systematic underestimation (delta ≈ −0.13 to −0.15), attributable to YOLOv8 detecting fewer defenders per frame than GT annotations, which compresses the model's attacking control estimate. The bias is structural and explainable, not random.
+**Results.** The pipeline preserves the most operationally relevant signal, control at the ball (`pc_at_ball`), with near-equivalent fidelity to ground truth at the pooled level (KS p=0.061, histogram overlap 0.86, Pearson r=0.32, MAE=0.12); note that stratified tests by action class do reject H0 (corners p=0.016, direct free kicks p=0.011), indicating the pooled pass reflects averaging across subgroups with partially opposing biases. Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) show systematic underestimation (delta ≈ −0.13 to −0.15), attributable to YOLOv8 detecting fewer defenders per frame than GT annotations, which compresses the model's attacking control estimate. The bias is structural and explainable, not random.
 
 **Impact.** Any team with broadcast access and a Python environment can run this pipeline. The approach is directly applicable to competitions where commercial tracking is absent but video is available.
 
@@ -330,7 +330,7 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 
 ### 8.1 What the pipeline gets right
 
-`pc_at_ball` — control probability at the ball location — is preserved with high fidelity. Histogram overlap of 0.857, KS p=0.061 (non-significant at α=0.05), and Pearson r=0.318 across 261 paired frames establish that the pipeline's estimate of immediate ball-zone control is reliable. For set-piece analysis, this is operationally the most important signal: it captures whether the executing team has spatial dominance at the point of delivery, which is the primary determinant of set-piece danger.
+`pc_at_ball` — control probability at the ball location — is preserved with meaningful fidelity at the pooled level. Histogram overlap of 0.857, KS p=0.061 (non-significant at α=0.05 pooled), and Pearson r=0.318 across 261 paired frames indicate the pipeline tracks immediate ball-zone control reasonably well. Stratified by action class, `pc_at_ball` does reject H0 (corners p=0.016, direct free kicks p=0.011); the pooled pass reflects averaging across subgroups with partially opposing biases rather than uniform distributional equivalence. For set-piece analysis this remains the most operationally useful signal: it captures whether the executing team has spatial dominance at the point of delivery, which is the primary determinant of set-piece danger.
 
 ### 8.2 What the pipeline underestimates and why
 
@@ -350,7 +350,7 @@ For a practitioner using this pipeline, the recommended approach is:
 
 ### 8.4 Methodological honesty
 
-Thirteen of 33 clips (39%) were excluded due to failed homography. This is a significant exclusion rate and reflects the dependency on GT pitch-line annotations. In a fully automated deployment, this would translate to a data loss rate that must be characterised per deployment context. The current pipeline cannot be described as robust to arbitrary broadcast angles.
+Thirteen of 33 clips (39%) were excluded due to failed homography. This is a significant exclusion rate and reflects the dependency on GT pitch-line annotations. The excluded clips may not be a random subset: homography failure is more likely in clips with wide-angle coverage, heavy advertising-board occlusion, or unusual camera elevation, meaning the 20 processable clips could over-represent high-quality, near-canonical broadcast angles. Distributional conclusions should be interpreted with this potential selection bias in mind. In a fully automated deployment, this would translate to a data loss rate that must be characterised per deployment context. The current pipeline cannot be described as robust to arbitrary broadcast angles.
 
 The distributional validation design is sound given the data constraints. Per-frame paired comparison is possible here only because pipeline and GT are computed on the same SoccerNet GSR frames, a controlled condition not available in a real cross-dataset validation scenario.
 
@@ -360,7 +360,7 @@ The distributional validation design is sound given the data constraints. Per-fr
 
 ### 9.1 Key Findings
 
-1. **`pc_at_ball` passes distributional validation** (KS p=0.061, overlap 0.857, MAE 0.122). The pipeline preserves the most decision-relevant set-piece signal.
+1. **`pc_at_ball` passes distributional validation at the pooled level** (KS p=0.061, overlap 0.857, MAE 0.122), though stratified tests by action class reject H0 (corners p=0.016, direct free kicks p=0.011). The pipeline preserves the most decision-relevant set-piece signal with the caveat that subgroup distributions diverge.
 2. **Global surface metrics are systematically biased** by YOLOv8 under-detection of defenders, producing underestimates of 0.13–0.15. The mechanism is identified, quantified, and consistent with the model's mathematical structure.
 3. **Homography from GT pitch-line annotations** is the binding constraint on coverage; 39% of clips were excluded. Automated pitch-line detection is the highest-priority unresolved dependency for production deployment.
 4. **The pipeline is fully reproducible** on a consumer laptop (MacBook Air M3), requiring no cloud infrastructure, proprietary data, or commercial licences.
@@ -390,21 +390,25 @@ The honest limit of the current work is data scale: 20 processable clips is a sm
 
 ## 10. Bibliography
 
-Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`, 2020-09-15. `https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking`
+Decroos, T., Bransen, L., Van Haaren, J., & Davis, J. (2019). Actions speak louder than goals: Valuing player actions in football. *Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining*, 1851–1861. https://doi.org/10.1145/3292500.3330758
 
-Spearman, W. (2018). Beyond Expected Goals. MIT Sloan Sports Analytics Conference.
+Deliège, A., Cioppa, A., Giancola, S., Seikavand, M. J., Magera, F., Jordi, B., Ghanem, B., & Van Droogenbroeck, M. (2021). SoccerNet-v2: A dataset and benchmarks for holistic understanding of broadcast soccer videos. *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)*, 4508–4519.
 
-Jocher, G. et al. (2023). *Ultralytics YOLOv8*. `https://github.com/ultralytics/ultralytics`
+Jocher, G., Chaurasia, A., & Qiu, J. (2023). *Ultralytics YOLO* (Version 8.0) [Software]. https://github.com/ultralytics/ultralytics
 
-Deliège, A. et al. (2021). SoccerNet-v2: A Dataset and Benchmarks for Holistic Understanding of Broadcast Soccer Videos. CVPR 2021 Workshops.
+Joos, V., Somers, V., & Standaert, B. (2024). *TrackLab* [Software]. GitHub. https://github.com/TrackingLaboratory/tracklab
 
-Cioppa, A. et al. (2022). SoccerNet Game State Recognition: End-to-End Athlete Tracking and Identification on a Minimap. CVPR 2022 Workshops.
+Mansourian, A. M., Somers, V., De Vleeschouwer, C., & Kasaei, S. (2023). Multi-task learning for joint re-identification, team affiliation, and role classification for sports visual tracking. *Proceedings of the 6th International Workshop on Multimedia Content Analysis in Sports (MMSports '23)*, 103–112. https://doi.org/10.1145/3606038.3616172
 
-StatsBomb (2024). *StatsBomb Open Data*. `https://github.com/statsbomb/open-data`
+Nie, X., Peng, W., Chen, Y., & Cao, J. (2021). A robust and efficient framework for sports-field registration. *Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)*, 1936–1944.
 
-Nie, X. et al. (2021). A robust and efficient framework for sports-field registration. WACV 2021.
+Shaw, L. (2020). *Pitch control model* [Software, commit 21f4c2d]. Friends of Tracking Data. https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking
 
-Decroos, T. et al. (2019). Actions Speak Louder than Goals: Valuing Player Actions in Football. KDD 2019.
+Somers, V., Joos, V., Giancola, S., Cioppa, A., Ghasemzadeh, S. A., Magera, F., Standaert, B., Mansourian, A. M., Zhou, X., Kasaei, S., Ghanem, B., Alahi, A., Van Droogenbroeck, M., & De Vleeschouwer, C. (2024). SoccerNet game state reconstruction: End-to-end athlete tracking and identification on a minimap. *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)*. https://doi.org/10.48550/arXiv.2404.11335
+
+Spearman, W. (2018). *Beyond expected goals* [Conference paper]. MIT Sloan Sports Analytics Conference.
+
+StatsBomb. (2024). *StatsBomb open data* [Dataset]. GitHub. https://github.com/statsbomb/open-data
 
 ---
 

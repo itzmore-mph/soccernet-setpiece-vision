@@ -1,0 +1,105 @@
+cff-version: 1.2.0
+message: "If you use this pipeline, please cite the following works."
+title: "Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis"
+authors:
+  - family-names: Haaf
+    given-names: Moritz Philipp
+date-released: 2026-06-30
+version: "1.0.0"
+license: MIT
+repository-code: "https://github.com/itzmore-mph/soccernet-setpiece-vision"
+
+references:
+
+  - type: conference-paper
+    title: "SoccerNet Game State Reconstruction: End-to-End Athlete Tracking and Identification on a Minimap"
+    authors:
+      - family-names: Somers
+        given-names: Vladimir
+      - family-names: Joos
+        given-names: Victor
+      - family-names: Giancola
+        given-names: Silvio
+      - family-names: Cioppa
+        given-names: Anthony
+      - family-names: Ghasemzadeh
+        given-names: Seyed Abolfazl
+      - family-names: Magera
+        given-names: Floriane
+      - family-names: Standaert
+        given-names: Baptiste
+      - family-names: Mansourian
+        given-names: Amir Mohammad
+      - family-names: Zhou
+        given-names: Xin
+      - family-names: Kasaei
+        given-names: Shohreh
+      - family-names: Ghanem
+        given-names: Bernard
+      - family-names: Alahi
+        given-names: Alexandre
+      - family-names: Van Droogenbroeck
+        given-names: Marc
+      - family-names: De Vleeschouwer
+        given-names: Christophe
+    collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)"
+    year: 2024
+    month: 6
+    location:
+      name: "Seattle, WA, USA"
+
+  - type: software
+    title: "TrackLab"
+    authors:
+      - family-names: Joos
+        given-names: Victor
+      - family-names: Somers
+        given-names: Vladimir
+      - family-names: Standaert
+        given-names: Baptiste
+    year: 2024
+    repository-code: "https://github.com/TrackingLaboratory/tracklab"
+
+  - type: conference-paper
+    title: "Multi-task Learning for Joint Re-identification, Team Affiliation, and Role Classification for Sports Visual Tracking"
+    authors:
+      - family-names: Mansourian
+        given-names: Amir M.
+      - family-names: Somers
+        given-names: Vladimir
+      - family-names: De Vleeschouwer
+        given-names: Christophe
+      - family-names: Kasaei
+        given-names: Shohreh
+    collection-title: "Proceedings of the 6th International Workshop on Multimedia Content Analysis in Sports (MMSports)"
+    pages: "103-112"
+    year: 2023
+    month: 10
+    publisher:
+      name: ACM
+    location:
+      name: "Ottawa, Canada"
+    doi: "10.1145/3606038.3616172"
+
+  - type: software
+    title: "Friends of Tracking: Pitch Control implementation"
+    authors:
+      - family-names: Shaw
+        given-names: Laurie
+    year: 2020
+    repository-code: "https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking"
+
+  - type: software
+    title: "Ultralytics YOLOv8"
+    authors:
+      - family-names: Jocher
+        given-names: Glenn
+    year: 2023
+    repository-code: "https://github.com/ultralytics/ultralytics"
+
+  - type: software
+    title: "StatsBomb Open Data"
+    authors:
+      - name: "StatsBomb"
+    year: 2024
+    repository-code: "https://github.com/statsbomb/open-data"
