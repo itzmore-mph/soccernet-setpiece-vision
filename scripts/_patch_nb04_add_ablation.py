@@ -1,5 +1,6 @@
 """Insert detector ablation section into nb04 between section 5 (verdict) and
-the final Conclusion markdown. Idempotent: skips if marker already present.
+the final Conclusion markdown, and extend the Conclusion to reference the
+ablation findings. Idempotent on both edits.
 """
 
 from __future__ import annotations
