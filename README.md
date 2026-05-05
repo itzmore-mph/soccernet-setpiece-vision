@@ -12,12 +12,12 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 A reproducible, open-source pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware. The pipeline targets set-piece situations (corners and direct free kicks), where broadcast cameras are near-static and all relevant players are in frame.
 
 **Pipeline stages:**
-1. Player detection via YOLOv8x
-2. Team assignment via KMeans on HSV jersey colours
+1. Player detection and tracking via YOLOv8x + ByteTrack (persistent player IDs across frames)
+2. Team assignment via KMeans on per-track mean HSV jersey colours (two-pass, once per clip)
 3. Pixel-to-pitch coordinate transformation via homography (OpenCV RANSAC)
 4. Pitch Control computation using Laurie Shaw's time-to-intercept model
 
-**Validation:** Distributional comparison against SoccerNet GSR ground-truth annotations on 20 processable clips from the 2024 dataset (33 identified, 13 excluded due to homography failure).
+**Validation:** Distributional comparison against SoccerNet GSR ground-truth annotations on 20 processable clips from the 2024 dataset (33 identified, 13 excluded due to homography failure, 2 excluded from visualisations due to annotation errors in the source data).
 
 **Key result:** `pc_at_ball` (control at the ball location) passes distributional validation at the pooled level (KS p=0.061, histogram overlap 0.857). Global surface metrics are systematically underestimated due to YOLOv8 under-detection of defenders in crowded penalty-area crops.
 
@@ -102,6 +102,18 @@ This project builds on the following works. See [CITATION.cff](CITATION.cff) for
 ### Pitch Control model
 
 Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`. https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking
+
+### ByteTrack (multi-object tracking)
+
+```bibtex
+@inproceedings{zhang2022bytetrack,
+  title   = {{ByteTrack}: Multi-Object Tracking by Associating Every Detection Box},
+  author  = {Zhang, Yifu and Sun, Peize and Jiang, Yi and Yu, Dongdong and Weng, Fucheng
+             and Yuan, Zehuan and Luo, Ping and Liu, Wenyu and Wang, Xinggang},
+  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
+  year    = {2022},
+}
+```
 
 ### Other dependencies
 

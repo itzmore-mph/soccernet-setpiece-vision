@@ -56,6 +56,30 @@ references:
     year: 2020
     repository-code: "https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking"
 
+  - type: conference-paper
+    title: "ByteTrack: Multi-Object Tracking by Associating Every Detection Box"
+    authors:
+      - family-names: Zhang
+        given-names: Yifu
+      - family-names: Sun
+        given-names: Peize
+      - family-names: Jiang
+        given-names: Yi
+      - family-names: Yu
+        given-names: Dongdong
+      - family-names: Weng
+        given-names: Fucheng
+      - family-names: Yuan
+        given-names: Zehuan
+      - family-names: Luo
+        given-names: Ping
+      - family-names: Liu
+        given-names: Wenyu
+      - family-names: Wang
+        given-names: Xinggang
+    collection-title: "Proceedings of the European Conference on Computer Vision (ECCV)"
+    year: 2022
+
   - type: software
     title: "Ultralytics YOLOv8"
     authors:

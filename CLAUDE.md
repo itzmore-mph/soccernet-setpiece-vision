@@ -8,11 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Moritz Philipp Haaf, MSc AI Applied to Sports, Sports Data Campus
 Deadline: 30 June 2026
 
-## Project Root
-/Users/mph/Dev/itzmore-mph/MAIS-projects/final-master-project/soccernet-setpiece-vision
-
 ## Data Storage
-External SSD: /Volumes/MPH-ExternalStorage/soccernet-gsr
+External SSD: `/Volumes/MPH-ExternalStorage/soccernet-gsr` (Mac) — path on Windows will differ.
 All SoccerNet GSR video clips and annotations stored here.
 Never store video data inside the project repo.
 
@@ -21,11 +18,12 @@ Computer Vision pipeline for set-piece analysis in football.
 Derive Pitch Control from SoccerNet GSR broadcast video.
 Validate distributionally against StatsBomb 360 Euro 2024.
 
-## Four Notebooks (CRISP-DM) — all run locally on Mac
+## Five Notebooks (CRISP-DM) — all run locally on Mac
 1. notebooks/01_business_and_data_understanding.ipynb
 2. notebooks/02_data_preparation_and_pipeline.ipynb
 3. notebooks/03_pitch_control.ipynb
 4. notebooks/04_evaluation_and_validation.ipynb
+5. notebooks/05_visualizations.ipynb
 
 ## Stack (keep it simple)
 - Python 3.11, conda env py311-dev
@@ -39,11 +37,18 @@ Validate distributionally against StatsBomb 360 Euro 2024.
 - mplsoccer: all pitch visualisations
 - Parquet: all intermediate outputs saved to outputs/
 
-## Critical Coordinate Conversion
-StatsBomb: 120 yards x 80 yards
-Pipeline: 105 metres x 68 metres
-x_m = x * (105/120)
-y_m = y * (68/80)
+## Coordinate Systems
+
+Three systems are in play — always be explicit about which one you are in:
+
+| System | Convention |
+|---|---|
+| StatsBomb | 120 yards × 80 yards, origin top-left |
+| Pipeline / mplsoccer | 105 m × 68 m, origin top-left |
+| SoccerNet GSR `bbox_pitch` | centred origin (±52.5 m, ±34 m) |
+
+StatsBomb → Pipeline: `x_m = x_sb * (105/120)`, `y_m = y_sb * (68/80)`
+GSR centred → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`
 
 ## Validation Strategy
 Distributional, not frame-matched.
@@ -53,11 +58,12 @@ Compare Pitch Control distributions across comparable set-piece types.
 ## Key Paths
 | Resource | Path |
 |---|---|
-| Project root | /Users/mph/Dev/itzmore-mph/MAIS-projects/final-master-project/soccernet-setpiece-vision |
 | Notebooks | ./notebooks |
 | Outputs (Parquet) | ./outputs |
+| Figures | ./outputs/figures |
 | Scripts | ./scripts |
-| SoccerNet data | /Volumes/MPH-ExternalStorage/soccernet-gsr |
+| Thesis source | ./report.md |
+| SoccerNet data (Mac) | /Volumes/MPH-ExternalStorage/soccernet-gsr |
 
 ## Repo State (as of 2026-05-05)
 All five notebooks exist and have been executed. Outputs directory is populated. Pipeline is functionally complete through validation.
@@ -70,8 +76,8 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `notebooks/05_visualizations.ipynb` — complete (animated PC + minimap + broadcast stills)
 
 **Scripts:**
-- `scripts/download_soccernet.py` — SoccerNet GSR download (idempotent)
-- `scripts/dump_ball_positions.py` — exports ball positions to Parquet for offline nb03/nb04 runs
+- `scripts/download_soccernet.py` — SoccerNet GSR download (idempotent, needs SSD mounted)
+- `scripts/dump_ball_positions.py` — reads `Labels-GameState.json` from the SSD and writes `outputs/ball_positions.parquet`; run this once after nb02 so that nb03/nb04 can execute offline without the SSD
 
 **Outputs (all Parquet):**
 - `outputs/ball_positions.parquet`
@@ -84,6 +90,10 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `outputs/validation_summary.parquet`
 
 **Figures** (`outputs/figures/`): 9 static PNGs + 2 animated GIFs (corner, direct free-kick).
+
+**Thesis source:** `report.md` — Markdown with LaTeX/pandoc front-matter, renders to PDF via `pandoc report.md -o report.pdf`.
+
+**Key validated result (for thesis context):** `pc_at_ball` passes distributional validation at the pooled level (KS p=0.061, histogram overlap 0.857). Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) underestimate by ~−0.13 to −0.15 due to structural YOLO under-detection of defenders in crowded penalty-area crops — bias is explainable, not random.
 
 **Next milestone:** written thesis/report ahead of 30 June 2026 deadline.
 
