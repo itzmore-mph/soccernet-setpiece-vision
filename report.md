@@ -1,11 +1,25 @@
+---
+title: "Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis"
+author: "Moritz Philipp Haaf"
+date: "30 June 2026"
+subject: "Master in Artificial Intelligence Applied to Sports - Master's Final Project"
+header-includes:
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyfoot[C]{\thepage}
+  - \fancyhead[L]{Pitch Control from Broadcast Video}
+  - \fancyhead[R]{Moritz Philipp Haaf}
+reference_docx: reference.docx
+---
+
 # Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis
 
 **Master in Artificial Intelligence Applied to Sports**
-**Module 9 — Master's Final Project**
+**Master's Final Project**
 
-Moritz Philipp Haaf
+Author: Moritz Philipp Haaf
 MSc AI Applied to Sports · Sports Data Campus
-Submission: 30 June 2026
+Submission Deadline: 30 June 2026
 
 ---
 
@@ -16,7 +30,7 @@ Submission: 30 June 2026
 3. [Objectives](#3-objectives)
 4. [Timeline](#4-timeline)
 5. [Conceptual and Technological Architecture](#5-conceptual-and-technological-architecture)
-6. [Methodology — CRISP-DM](#6-methodology--crisp-dm)
+6. [Methodology: CRISP-DM](#6-methodology-crisp-dm)
 7. [Project Development](#7-project-development)
    - 7.1 Business Understanding
    - 7.2 Data Understanding
@@ -33,13 +47,13 @@ Submission: 30 June 2026
 
 ## 1. Executive Summary
 
-**Problem.** Optical player tracking — the data layer that powers modern tactical analysis — is commercially available only to elite clubs and leagues. Second divisions, women's football, youth academies, and most scouting contexts operate without it.
+**Problem.** Optical player tracking, the data layer that powers modern tactical analysis, is commercially available only to elite clubs and leagues. Second divisions, women's football, youth academies, and most scouting contexts operate without it.
 
-**Solution.** This project delivers a reproducible, open-source computer vision pipeline that derives Pitch Control from broadcast video, requiring no proprietary tracking hardware. The pipeline detects players using a pre-trained object detector (YOLOv8x), assigns team labels via jersey colour clustering (KMeans on HSV values), transforms pixel coordinates to metric pitch coordinates via homography, and computes attacking Pitch Control using Laurie Shaw's time-to-intercept model. The focus is set pieces — corners and direct free kicks — where broadcast cameras are near-static and all relevant players are typically in frame.
+**Solution.** This project delivers a reproducible, open-source computer vision pipeline that derives Pitch Control from broadcast video, requiring no proprietary tracking hardware. The pipeline detects players using a pre-trained object detector (YOLOv8x), assigns team labels via jersey colour clustering (KMeans on HSV values), transforms pixel coordinates to metric pitch coordinates via homography, and computes attacking Pitch Control using Laurie Shaw's time-to-intercept model. The focus is set pieces (corners and direct free kicks), where broadcast cameras are near-static and all relevant players are typically in frame.
 
 **Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations on 33 clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset. Validation is distributional: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap.
 
-**Results.** The pipeline preserves the most operationally relevant signal — control at the ball (`pc_at_ball`) — with near-equivalent fidelity to ground truth (KS p=0.061, histogram overlap 0.86, Pearson r=0.32, MAE=0.12). Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) show systematic underestimation (delta ≈ −0.13 to −0.15), attributable to YOLOv8 detecting fewer defenders per frame than GT annotations, which compresses the model's attacking control estimate. The bias is structural and explainable, not random.
+**Results.** The pipeline preserves the most operationally relevant signal, control at the ball (`pc_at_ball`), with near-equivalent fidelity to ground truth (KS p=0.061, histogram overlap 0.86, Pearson r=0.32, MAE=0.12). Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) show systematic underestimation (delta ≈ −0.13 to −0.15), attributable to YOLOv8 detecting fewer defenders per frame than GT annotations, which compresses the model's attacking control estimate. The bias is structural and explainable, not random.
 
 **Impact.** Any team with broadcast access and a Python environment can run this pipeline. The approach is directly applicable to competitions where commercial tracking is absent but video is available.
 
@@ -49,21 +63,21 @@ Submission: 30 June 2026
 
 ### 2.1 Context
 
-In elite football, Pitch Control — the probability that a given team could reach any point on the pitch first under current player positions — has become a standard analytical tool for evaluating spatial dominance, tactical compactness, and the danger of set-piece situations. Systems like StatsBomb 360, SkillCorner, and Opta Tracking deliver this data in near-real time. Their cost and infrastructure requirements, however, effectively restrict them to top-tier competitions.
+In elite football, Pitch Control (the probability that a given team could reach any point on the pitch first under current player positions) has become a standard analytical tool for evaluating spatial dominance, tactical compactness, and the danger of set-piece situations. Systems like StatsBomb 360, SkillCorner, and Opta Tracking deliver this data in near-real time. Their cost and infrastructure requirements, however, effectively restrict them to top-tier competitions.
 
 For the majority of professional and semi-professional clubs, data-driven set-piece analysis remains out of reach not because of analytical sophistication, but because of data access.
 
 ### 2.2 The Problem
 
-Set pieces — corners and direct free kicks — account for roughly 30% of goals in major tournaments (StatsBomb, 2024). They are also the highest-information moments for a computer vision pipeline: the broadcast camera is nearly static, all relevant players are in frame, and the ball position is precisely known from the event feed. This combination makes set pieces the optimal entry point for extracting positional value from video without a dedicated tracking rig.
+Set pieces (corners and direct free kicks) account for roughly 30% of goals in major tournaments (StatsBomb, 2024). They are also the highest-information moments for a computer vision pipeline: the broadcast camera is nearly static, all relevant players are in frame, and the ball position is precisely known from the event feed. This combination makes set pieces the optimal entry point for extracting positional value from video without a dedicated tracking rig.
 
 ### 2.3 Why This Matters
 
-The analytical gap between well-funded and resource-constrained clubs is partly a data infrastructure problem. A pipeline that converts broadcast video into a spatially meaningful signal — Pitch Control — closes a portion of that gap without requiring proprietary hardware. The output is interpretable by coaches and analysts, not only data scientists.
+The analytical gap between well-funded and resource-constrained clubs is partly a data infrastructure problem. A pipeline that converts broadcast video into a spatially meaningful signal (Pitch Control) closes a portion of that gap without requiring proprietary hardware. The output is interpretable by coaches and analysts, not only data scientists.
 
 ### 2.4 Validation Approach
 
-Validating a computer vision pipeline against proprietary tracking data is not straightforward when the two datasets do not share clips. Here, both pipeline and ground truth are computed on the same SoccerNet GSR frames, enabling per-frame paired comparison in addition to distributional comparison. The broader distributional target — how pipeline-derived Pitch Control compares to StatsBomb 360 freeze-frame statistics — is addressed through Euro 2024 event data as a reference distribution.
+Validating a computer vision pipeline against proprietary tracking data is not straightforward when the two datasets do not share clips. Here, both pipeline and ground truth are computed on the same SoccerNet GSR frames, enabling per-frame paired comparison in addition to distributional comparison. The broader distributional target, how pipeline-derived Pitch Control compares to StatsBomb 360 freeze-frame statistics, is addressed through Euro 2024 event data as a reference distribution.
 
 ---
 
@@ -90,12 +104,12 @@ Validating a computer vision pipeline against proprietary tracking data is not s
 
 | Phase | Activity | Period |
 |---|---|---|
-| 1 | Problem definition, literature review, data access setup | Feb 2026 |
-| 2 | nb01: StatsBomb EDA, set-piece extraction, benchmark establishment | Feb–Mar 2026 |
-| 3 | nb02: CV pipeline build (YOLO, KMeans, homography) | Mar–Apr 2026 |
-| 4 | nb03: Pitch Control computation on both tracks | Apr 2026 |
-| 5 | nb04: Evaluation, KS tests, bias diagnosis | Apr–May 2026 |
-| 6 | nb05: Visualisations (animations, broadcast stills, minimap) | May 2026 |
+| 1 | Problem definition, literature review, data access setup | Apr 2026 |
+| 2 | nb01: StatsBomb EDA, set-piece extraction, benchmark establishment | May 2026 |
+| 3 | nb02: CV pipeline build (YOLO, KMeans, homography) | May-Jun 2026 |
+| 4 | nb03: Pitch Control computation on both tracks | May-Jun 2026 |
+| 5 | nb04: Evaluation, KS tests, bias diagnosis | Jun 2026 |
+| 6 | nb05: Visualisations (animations, broadcast stills, minimap) | Jun 2026 |
 | 7 | Report writing and submission preparation | May–Jun 2026 |
 | **Deadline** | **Submission** | **30 Jun 2026** |
 
@@ -112,41 +126,41 @@ SoccerNet GSR clips (external SSD)
         │
         ▼
 ┌──────────────────────────────────┐
-│  nb02 — CV Pipeline              │
+│  nb02: CV Pipeline               │
 │  ├── YOLOv8x player detection    │
 │  ├── KMeans (HSV) team assign.   │
 │  ├── Homography (GT pitch lines) │
-│  └── → detections_pipeline.pq   │
+│  └── → detections_pipeline.pq    │
 └──────────────────────────────────┘
         │                   │
         │        SoccerNet GT bbox_pitch annotations
         │                   │
         ▼                   ▼
 ┌──────────────────────────────────┐
-│  nb03 — Pitch Control            │
+│  nb03: Pitch Control             │
 │  ├── Laurie Shaw TTI model       │
 │  ├── Both tracks (pipeline / GT) │
-│  └── → pitch_control.parquet    │
+│  └── → pitch_control.parquet     │
 └──────────────────────────────────┘
         │
         ▼
 ┌──────────────────────────────────┐
-│  nb04 — Evaluation               │
+│  nb04: Evaluation                │
 │  ├── KS tests (α=0.05)           │
 │  ├── Histogram overlap           │
 │  ├── Per-frame paired stats      │
 │  ├── Bias diagnosis              │
-│  └── → validation_summary.pq    │
+│  └── → validation_summary.pq     │
 └──────────────────────────────────┘
 
 StatsBomb Euro 2024 (nb01, online / cache)
         │
         ▼
 ┌──────────────────────────────────┐
-│  nb01 — Business & Data Und.     │
+│  nb01: Business & Data Und.      │
 │  ├── Set-piece EDA               │
 │  ├── Outcome analysis            │
-│  └── → setpieces.parquet        │
+│  └── → setpieces.parquet         │
 └──────────────────────────────────┘
 ```
 
@@ -178,7 +192,7 @@ SoccerNet GSR `bbox_pitch` annotations use a centred origin (±52.5 m, ±34 m); 
 
 ---
 
-## 6. Methodology — CRISP-DM
+## 6. Methodology: CRISP-DM
 
 CRISP-DM (Cross-Industry Standard Process for Data Mining) was chosen as the project framework because it structures data science work into clearly communicable phases that map directly onto the notebook architecture. Each notebook corresponds to one or more CRISP-DM phases.
 
@@ -191,7 +205,7 @@ CRISP-DM (Cross-Industry Standard Process for Data Mining) was chosen as the pro
 | Evaluation | nb04 | `validation_summary.parquet`, `validation_paired.parquet` |
 | Deployment (conceptual) | nb04 §5, this report | Scalability assessment, integration path |
 
-CRISP-DM is appropriate here because the project is not model-selection-heavy (the Pitch Control model is fixed from domain literature), but is data-engineering- and evaluation-intensive. The iterative character of CRISP-DM — going back to data preparation when evaluation reveals bias — is directly reflected in the addition of the bias diagnosis section (nb04 §4b) after initial KS results showed systematic under-estimation.
+CRISP-DM is appropriate here because the project is not model-selection-heavy (the Pitch Control model is fixed from domain literature), but is data-engineering- and evaluation-intensive. The iterative character of CRISP-DM, going back to data preparation when evaluation reveals bias, is directly reflected in the addition of the bias diagnosis section (nb04 §4b) after initial KS results showed systematic under-estimation.
 
 ---
 
@@ -206,9 +220,9 @@ CRISP-DM is appropriate here because the project is not model-selection-heavy (t
 **Success criteria.** At least partial distributional equivalence (KS test failure to reject H0, α=0.05) on one or more Pitch Control summary metrics, combined with a mechanistic explanation for any observed bias.
 
 **Why set pieces.** Three characteristics make set pieces the ideal entry point:
-1. Broadcast cameras are near-static during execution — homography is stable.
-2. All tactically relevant players are in frame — no occlusion from wide angles.
-3. The ball position is fixed and can be pulled from the event feed — no ball tracking required.
+1. Broadcast cameras are near-static during execution, so homography is stable.
+2. All tactically relevant players are in frame, with no occlusion from wide angles.
+3. The ball position is fixed and can be pulled from the event feed, so no ball tracking is required.
 
 Set pieces account for approximately 30% of goals in major tournaments (StatsBomb, 2024), making the tactical output directly decision-relevant.
 
@@ -219,26 +233,26 @@ Set pieces account for approximately 30% of goals in major tournaments (StatsBom
 Key EDA findings from nb01:
 - Corners cluster tightly at corner flag coordinates (105, 0), (105, 68), (0, 0), (0, 68) as expected.
 - Direct free kicks span a wide range of pitch locations but concentrate in the attacking third (x_m > 70).
-- Freeze-frame coverage drops to zero for many events — StatsBomb 360 is not available for every event.
+- Freeze-frame coverage drops to zero for many events; StatsBomb 360 is not available for every event.
 - 10-second outcome analysis: the majority of set pieces result in no shot within the window, confirming that defensive organisation (captured by Pitch Control) is the primary analytical variable, not just shot count.
 
 **SoccerNet GSR (nb02).** 33 clips were identified across the four dataset splits (train/valid/test/challenge) with `action_class` in {Corner, Direct free-kick}: 17 corners and 16 direct free kicks. Each clip is a broadcast video segment; the `action_position` field gives the frame index of the set-piece moment. The dataset includes per-frame player annotations (`bbox_pitch`, metric-centred coordinates) and pitch-line annotations used for homography.
 
 **Data limitations identified:**
 - 13 / 33 clips (39%) failed homography estimation because the pitch-line annotations did not provide sufficient coverage of the detectable intersections. These clips were excluded from the pipeline.
-- SoccerNet GSR and StatsBomb Euro 2024 are disjoint datasets — no per-clip or per-match correspondence exists, constraining validation to be distributional.
+- SoccerNet GSR and StatsBomb Euro 2024 are disjoint datasets, so no per-clip or per-match correspondence exists, constraining validation to be distributional.
 
 ### 7.3 Data Preparation
 
 The core of nb02 is the parallel construction of two player coordinate tracks for each processable clip.
 
-**Pipeline track — three-stage process:**
+**Pipeline track, three-stage process:**
 
 1. **Player detection (YOLOv8x).** YOLOv8x was run at confidence threshold 0.40 on COCO class 0 (person). Foot positions were approximated as the bottom-centre of each bounding box, which is standard practice for homography projection. Inference ran on Apple Silicon MPS backend.
 
 2. **Team assignment (KMeans on HSV).** The torso region of each bounding box (central 50% horizontally, 15–45% vertically) was extracted and converted to HSV. Mean H, S, V values form a 3-dimensional feature vector per player. KMeans with k=3 was applied; the smallest cluster (by count) is dropped if it represents less than 15% of detections or its centroid matches a referee-kit heuristic (yellow/green HSV or very dark). The remaining two clusters are assigned team labels 0 and 1. This approach requires no labelled jersey data and is robust to varying kit colours across clips.
 
-3. **Homography (OpenCV RANSAC).** SoccerNet GSR pitch-line annotations label each line as a named polyline in normalised image coordinates. A library of 28 known pitch-line intersections (outer corners, halfway line, penalty box corners, six-yard box corners, goal posts — see nb02 §2.1) was used to derive image↔pitch correspondences. `cv2.findHomography` with RANSAC (reprojection threshold 15 px) estimated the planar transform from pixel to metric coordinates. Clips where fewer than 4 correspondences were recovered were excluded.
+3. **Homography (OpenCV RANSAC).** SoccerNet GSR pitch-line annotations label each line as a named polyline in normalised image coordinates. A library of 28 known pitch-line intersections (outer corners, halfway line, penalty box corners, six-yard box corners, goal posts; see nb02 §2.1) was used to derive image↔pitch correspondences. `cv2.findHomography` with RANSAC (reprojection threshold 15 px) estimated the planar transform from pixel to metric coordinates. Clips where fewer than 4 correspondences were recovered were excluded.
 
 **Ground-truth track.** For each processed frame, SoccerNet GSR `bbox_pitch` annotations were parsed directly. Centred coordinates (±52.5, ±34) were re-centred to (0–105, 0–68). Player role was preserved (player / goalkeeper); referees were excluded by category_id filter.
 
@@ -248,9 +262,9 @@ The core of nb02 is the parallel construction of two player coordinate tracks fo
 
 ### 7.4 Modeling
 
-**Model selection.** Laurie Shaw's time-to-intercept (TTI) Pitch Control model (Friends of Tracking, 2020, reference commit `21f4c2d`) was chosen because it is the established open-source baseline in football analytics literature, is computationally tractable on CPU/MPS for static frames, and produces interpretable probability surfaces. No alternative models were evaluated — the project's analytical question is about pipeline coordinate quality, not model selection.
+**Model selection.** Laurie Shaw's time-to-intercept (TTI) Pitch Control model (Friends of Tracking, 2020, reference commit `21f4c2d`) was chosen because it is the established open-source baseline in football analytics literature, is computationally tractable on CPU/MPS for static frames, and produces interpretable probability surfaces. No alternative models were evaluated; the project's analytical question is about pipeline coordinate quality, not model selection.
 
-**Static-frame adaptation.** The original Shaw model uses player velocities. Since SoccerNet GSR set-piece clips capture a near-static moment (ball out of play, players in position), velocities are unavailable and assumed to be zero for every player. This makes the model an *instantaneous* control surface — spatial dominance given current positions, without momentum. The same assumption is applied identically to both pipeline and GT tracks, ensuring any distributional difference is attributable to coordinate quality, not model asymmetry.
+**Static-frame adaptation.** The original Shaw model uses player velocities. Since SoccerNet GSR set-piece clips capture a near-static moment (ball out of play, players in position), velocities are unavailable and assumed to be zero for every player. This makes the model an *instantaneous* control surface: spatial dominance given current positions, without momentum. The same assumption is applied identically to both pipeline and GT tracks, ensuring any distributional difference is attributable to coordinate quality, not model asymmetry.
 
 **Model parameters (locked):**
 
@@ -298,17 +312,17 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 | `pc_in_third` | −0.107 | −0.073 | 0.236 | −0.066 |
 | `pc_area_gt_0p5` | −0.170 | −0.214 | 0.321 | −0.145 |
 
-**Bias diagnosis (nb04 §4b).** GT annotations provide more player detections per frame than the pipeline (4,295 GT rows vs. 4,146 pipeline rows across 20 identical clips). In the Shaw model, additional defenders compress attacking PC uniformly across the surface. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count — which is why it is the only metric to pass KS. The `10_defenders_vs_pc_mean.png` figure confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
+**Bias diagnosis (nb04 §4b).** GT annotations provide more player detections per frame than the pipeline (4,295 GT rows vs. 4,146 pipeline rows across 20 identical clips). In the Shaw model, additional defenders compress attacking PC uniformly across the surface. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count, which is why it is the only metric to pass KS. The `10_defenders_vs_pc_mean.png` figure confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
 
 ### 7.6 Deployment
 
 **Current state.** The pipeline runs end-to-end on a MacBook Air M3 (Apple Silicon MPS) with no cloud dependency. Runtime per clip is approximately 15–30 seconds for YOLO inference; the full 20-clip run completes in under 15 minutes.
 
-**Integration path.** The notebook-based pipeline can be converted to a batch script with minimal refactoring — the processing loop in nb02 is self-contained. The output format (Parquet) is compatible with downstream analytics tools (DuckDB, pandas, polars). A club analyst with broadcast video and access to SoccerNet-format pitch-line annotations (or an automated pitch-line detector) could adopt the pipeline directly.
+**Integration path.** The notebook-based pipeline can be converted to a batch script with minimal refactoring; the processing loop in nb02 is self-contained. The output format (Parquet) is compatible with downstream analytics tools (DuckDB, pandas, polars). A club analyst with broadcast video and access to SoccerNet-format pitch-line annotations (or an automated pitch-line detector) could adopt the pipeline directly.
 
 **Scalability considerations.** The current homography step depends on GT pitch-line annotations. For fully automated deployment, a pitch-line segmentation model (e.g. SoccerNet calibration model) would need to replace the annotation-dependent step. YOLO inference scales linearly with frame count. Pitch Control computation is the fastest step (vectorised numpy, <0.1 s per frame).
 
-**Limitations for production use.** Zero-velocity assumption limits accuracy for dynamic (non-set-piece) phases. KMeans team assignment can fail in rare cases where kit colours are very similar between teams. Homography accuracy depends on pitch-line visibility — clips with heavy advertising board occlusion or unusual camera angles may fail.
+**Limitations for production use.** Zero-velocity assumption limits accuracy for dynamic (non-set-piece) phases. KMeans team assignment can fail in rare cases where kit colours are very similar between teams. Homography accuracy depends on pitch-line visibility; clips with heavy advertising board occlusion or unusual camera angles may fail.
 
 ---
 
@@ -320,25 +334,25 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 
 ### 8.2 What the pipeline underestimates and why
 
-Global metrics (`pc_mean`, `pc_area_gt_0p5`) are systematically underestimated by 0.13–0.15. The bias is structural: YOLOv8 detects fewer defenders per frame than GT annotations, and the Shaw model is sensitive to total defender count in a predictable direction — more defenders compress attacking control across the whole surface.
+Global metrics (`pc_mean`, `pc_area_gt_0p5`) are systematically underestimated by 0.13–0.15. The bias is structural: YOLOv8 detects fewer defenders per frame than GT annotations, and the Shaw model is sensitive to total defender count in a predictable direction, where more defenders compress attacking control across the whole surface.
 
-This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops — typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
+This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops, typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
 
-The `pc_in_box` metric shows a slight positive bias (pipeline 0.594 vs GT 0.571, bias +0.036) which is directionally reversed. This is consistent with fewer defenders being detected *inside* the box — the pipeline overestimates attacking control in the most contested zone because it is missing defenders there.
+The `pc_in_box` metric shows a slight positive bias (pipeline 0.594 vs GT 0.571, bias +0.036) which is directionally reversed. This is consistent with fewer defenders being detected *inside* the box: the pipeline overestimates attacking control in the most contested zone because it is missing defenders there.
 
 ### 8.3 Practical implications
 
 For a practitioner using this pipeline, the recommended approach is:
 
-1. Use `pc_at_ball` as the primary tactical signal — it is calibrated and reliable.
+1. Use `pc_at_ball` as the primary tactical signal; it is calibrated and reliable.
 2. Treat `pc_mean` and `pc_area_gt_0p5` as relative indicators for comparing set pieces within the same pipeline run, not as absolute values.
-3. Monitor `n_defenders` in the output Parquet — frames with unusually low defender counts should be treated as lower-confidence.
+3. Monitor `n_defenders` in the output Parquet; frames with unusually low defender counts should be treated as lower-confidence.
 
 ### 8.4 Methodological honesty
 
 Thirteen of 33 clips (39%) were excluded due to failed homography. This is a significant exclusion rate and reflects the dependency on GT pitch-line annotations. In a fully automated deployment, this would translate to a data loss rate that must be characterised per deployment context. The current pipeline cannot be described as robust to arbitrary broadcast angles.
 
-The distributional validation design is sound given the data constraints. Per-frame paired comparison is possible here only because pipeline and GT are computed on the same SoccerNet GSR frames — a controlled condition not available in a real cross-dataset validation scenario.
+The distributional validation design is sound given the data constraints. Per-frame paired comparison is possible here only because pipeline and GT are computed on the same SoccerNet GSR frames, a controlled condition not available in a real cross-dataset validation scenario.
 
 ---
 
@@ -348,7 +362,7 @@ The distributional validation design is sound given the data constraints. Per-fr
 
 1. **`pc_at_ball` passes distributional validation** (KS p=0.061, overlap 0.857, MAE 0.122). The pipeline preserves the most decision-relevant set-piece signal.
 2. **Global surface metrics are systematically biased** by YOLOv8 under-detection of defenders, producing underestimates of 0.13–0.15. The mechanism is identified, quantified, and consistent with the model's mathematical structure.
-3. **Homography from GT pitch-line annotations** is the binding constraint on coverage — 39% of clips were excluded. Automated pitch-line detection is the highest-priority unresolved dependency for production deployment.
+3. **Homography from GT pitch-line annotations** is the binding constraint on coverage; 39% of clips were excluded. Automated pitch-line detection is the highest-priority unresolved dependency for production deployment.
 4. **The pipeline is fully reproducible** on a consumer laptop (MacBook Air M3), requiring no cloud infrastructure, proprietary data, or commercial licences.
 
 ### 9.2 Reflection on Objectives
@@ -376,7 +390,7 @@ The honest limit of the current work is data scale: 20 processable clips is a sm
 
 ## 10. Bibliography
 
-Shaw, L. (2020). *Friends of Tracking — Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`, 2020-09-15. `https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking`
+Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`, 2020-09-15. `https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking`
 
 Spearman, W. (2018). Beyond Expected Goals. MIT Sloan Sports Analytics Conference.
 
@@ -396,7 +410,7 @@ Decroos, T. et al. (2019). Actions Speak Louder than Goals: Valuing Player Actio
 
 ## 11. Appendices
 
-### Appendix A — Repository Structure
+### Appendix A: Repository Structure
 
 ```
 soccernet-setpiece-vision/
@@ -438,7 +452,7 @@ soccernet-setpiece-vision/
 └── report.md
 ```
 
-### Appendix B — Key Model Parameters
+### Appendix B: Key Model Parameters
 
 All parameters below are locked for reproducibility. Any deviation invalidates the validation in nb04.
 
@@ -457,7 +471,7 @@ All parameters below are locked for reproducibility. Any deviation invalidates t
 | Histogram bins | 12 | nb04 |
 | Frame window around action_position | ±15 frames | nb02 |
 
-### Appendix C — Data Sources and Access
+### Appendix C: Data Sources and Access
 
 | Dataset | Access | Notes |
 |---|---|---|
@@ -465,6 +479,6 @@ All parameters below are locked for reproducibility. Any deviation invalidates t
 | StatsBomb Euro 2024 | `statsbombpy` (open, no authentication required) | Auto-cached in `~/.cache/statsbombpy/` |
 | YOLOv8x weights | Auto-downloaded by `ultralytics` on first use | Cached in `~/.cache/ultralytics/` |
 
-### Appendix D — Validation Summary Table (Full)
+### Appendix D: Validation Summary Table (Full)
 
 See `outputs/validation_summary.parquet` for the complete per-metric, per-action-class breakdown (15 rows: 5 metrics × 3 strata). The table is produced by nb04 §2 and is reproducible by re-running that notebook with the cached `pitch_control.parquet`.
