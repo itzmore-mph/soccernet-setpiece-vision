@@ -1,0 +1,91 @@
+"""Dump GT player detections for all 33 set-piece clips' frame windows.
+
+Extends `outputs/detections_gt.parquet` (which only covers 20 clips that survived
+GT-pitch-line homography in nb02) to cover all 33 clips. Writes
+`outputs/detections_gt_full.parquet` with the same schema as detections_gt.
+
+Used by run_pc_tvcalib + ablation comparisons that need GT for the 13 clips
+that nb02 originally skipped.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+GSR = Path("/Volumes/MPH-ExternalStorage/soccernet-gsr/gamestate-2024")
+SPLITS = ["train", "valid", "test", "challenge"]
+TARGET_ACTIONS = {"Corner", "Direct free-kick"}
+FRAME_WINDOW = 15
+PITCH_L = 105.0
+PITCH_W = 68.0
+
+
+def main():
+    rows = []
+    n_clips = 0
+    for split in SPLITS:
+        split_dir = GSR / split
+        if not split_dir.is_dir():
+            continue
+        for clip_dir in sorted(split_dir.glob("SNGS-*")):
+            label_path = clip_dir / "Labels-GameState.json"
+            if not label_path.is_file():
+                continue
+            try:
+                labels = json.load(open(label_path))
+            except Exception:
+                continue
+            info = labels.get("info", {})
+            if info.get("action_class") not in TARGET_ACTIONS:
+                continue
+            n_clips += 1
+            n_frames = len(labels["images"])
+            centre = max(1, min(int(info.get("action_position", 375)), n_frames))
+            lo = max(1, centre - FRAME_WINDOW)
+            hi = min(n_frames, centre + FRAME_WINDOW)
+            # build image_id index for this clip
+            id_for_frame = {
+                int(img["file_name"].rstrip(".jpg")): img["image_id"]
+                for img in labels["images"] if img.get("file_name")
+            }
+            # build per-image annotation index
+            anns_by_image: dict = {}
+            for a in labels["annotations"]:
+                if a.get("category_id") not in (1, 2):
+                    continue
+                anns_by_image.setdefault(a.get("image_id"), []).append(a)
+            for frame_idx in range(lo, hi + 1):
+                image_id = id_for_frame.get(frame_idx)
+                if image_id is None:
+                    continue
+                for a in anns_by_image.get(image_id, []):
+                    bp = a.get("bbox_pitch")
+                    if not bp:
+                        continue
+                    xc = bp.get("x_bottom_middle")
+                    yc = bp.get("y_bottom_middle")
+                    if xc is None or yc is None:
+                        continue
+                    rows.append({
+                        "split": split, "clip_id": clip_dir.name,
+                        "action_class": info["action_class"],
+                        "frame_idx": frame_idx,
+                        "x_m": float(xc) + PITCH_L / 2,
+                        "y_m": float(yc) + PITCH_W / 2,
+                        "team": a["attributes"].get("team"),
+                        "role": a["attributes"].get("role"),
+                        "track_id": a.get("track_id"),
+                    })
+    df = pd.DataFrame(rows)
+    out = OUTPUTS_DIR / "detections_gt_full.parquet"
+    df.to_parquet(out, index=False)
+    print(f"clips: {n_clips}  rows: {len(df)}  saved: {out}")
+    print(f"clips with GT players: {df['clip_id'].nunique()}")
+
+
+if __name__ == "__main__":
+    main()

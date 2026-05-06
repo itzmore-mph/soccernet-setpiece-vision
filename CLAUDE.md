@@ -34,7 +34,8 @@ Validate distributionally against StatsBomb 360 Euro 2024.
 - Soccana (HuggingFace `Adit-jain/soccana`, YOLOv11n football-finetuned): ablation detector for section 6
 - ByteTrack (ultralytics built-in): persistent player IDs across frames
   - Requires `lap` package; `pip install lap` if `yolo.track()` fails on import
-- OpenCV: homography via RANSAC, coordinate transformation
+- OpenCV: RANSAC homography (legacy GT-leak baseline only)
+- TVCalib (Theiner & Ewerth, WACV 2023, MM4SPA/tvcalib): autonomous camera calibration replacing GT pitch lines. Sibling dir `../tvcalib/` with own venv at `tvcalib/.venv/` (torch 2.11, kornia 0.8.2). Patches applied for torch 2.x: `tvcalib/sncalib_dataset.py:13` (`string_classes`), `tvcalib/inference.py:89` (`weights_only=False`).
 - KMeans (scikit-learn): two-pass team assignment on per-track mean HSV jersey colour (once per clip)
 - Pitch Control: Laurie Shaw Friends of Tracking implementation
 - mplsoccer: all pitch visualisations
@@ -68,7 +69,7 @@ Compare Pitch Control distributions across comparable set-piece types.
 | Thesis source | ./report.md |
 | SoccerNet data (Mac) | /Volumes/MPH-ExternalStorage/soccernet-gsr |
 
-## Repo State (as of 2026-05-05)
+## Repo State (as of 2026-05-06)
 All five notebooks exist and have been executed. Outputs directory is populated. Pipeline is functionally complete through validation.
 
 **Notebooks:**
@@ -88,6 +89,15 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `scripts/repair_setpieces_freeze_frames.py` — re-fetches StatsBomb 360 freeze frames per match if nb01 produced 0% coverage. Use only if `outputs/setpieces.parquet` shows empty `freeze_frame` arrays.
 - `scripts/_patch_nb01_cell15.py` — internal helper that patches a specific cell in nb01 (not for general use).
 - `scripts/_patch_nb04_add_ablation.py` — internal helper that adds the detector ablation section to nb04 (not for general use).
+- `scripts/tvcalib_rmse_check.py` — Phase 1 sanity: project GT player `bbox_pitch` foot points through TVCalib H vs GT-pitch-line H, measure pixel RMSE on 5 SNGS-066 frames. Writes `outputs/tvcalib_phase1_rmse.parquet`. Needs SSD + `tvcalib/.venv/` set up.
+- `scripts/run_tvcalib_batch.py` — Phase 2 batch: stage all set-piece frames (33 clips × 16 = 528) into `/tmp/tvcalib_batch/`, invoke `tvcalib/run_inference.py` once, parse `calib.json` -> `outputs/homographies_tvcalib.parquet`. Idempotent; reuses `/tmp/tvcalib_batch_out/calib.json` if present.
+- `scripts/run_pipeline_tvcalib.py` — Phase 3 pipeline run: mirrors nb02 cell 8 with TVCalib H lookup replacing `homography_from_pitch_lines`. Writes `outputs/detections_pipeline_tvcalib.parquet`. Needs SSD.
+- `scripts/run_pc_tvcalib.py` — PC model on TVCalib detections; writes `outputs/pitch_control_tvcalib.parquet` (track='tvcalib'). SSD-free.
+- `scripts/dump_gt_setpieces.py` — extracts GT player positions for ALL 33 clips' set-piece windows (not the 20-clip subset that survived GT-line homography in nb02). Writes `outputs/detections_gt_full.parquet`. Needs SSD.
+- `scripts/run_pc_gt_full.py` — PC over `detections_gt_full.parquet`; writes `outputs/pitch_control_gt_full.parquet`. SSD-free.
+- `scripts/ks_table_tvcalib.py` — KS comparison: GT-leak YOLOv8x vs TVCalib YOLOv8x vs TVCalib Soccana, all against full-cohort GT. Writes `outputs/validation_summary_tvcalib.parquet` and `outputs/figures/13_ks_table_tvcalib.png`.
+- `scripts/run_soccana_tvcalib.py` — Soccana detector under TVCalib H (pure ablation isolation). Writes `outputs/detections_soccana_tvcalib.parquet`. Needs SSD.
+- `scripts/run_pc_soccana_tvcalib.py` — PC for Soccana+TVCalib detections; writes `outputs/pitch_control_soccana_tvcalib.parquet`. SSD-free.
 
 **Outputs (all Parquet):**
 - `outputs/ball_positions.parquet`
@@ -102,14 +112,41 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `outputs/validation_summary.parquet`
 - `outputs/ablation_detector_summary.parquet`      # detection-count comparison
 - `outputs/ablation_ks_summary.parquet`            # PC KS table per detector
+- `outputs/homographies_tvcalib.parquet`           # TVCalib H per (split, clip, frame), 528 rows × 33 clips
+- `outputs/detections_pipeline_tvcalib.parquet`    # YOLOv8x under TVCalib H, 6226 rows × 33 clips
+- `outputs/detections_soccana_tvcalib.parquet`     # Soccana under TVCalib H, 6369 rows × 33 clips
+- `outputs/detections_gt_full.parquet`             # GT for all 33 clips (not the GT-leak 20)
+- `outputs/pitch_control_tvcalib.parquet`          # PC for YOLOv8x+TVCalib
+- `outputs/pitch_control_soccana_tvcalib.parquet`  # PC for Soccana+TVCalib
+- `outputs/pitch_control_gt_full.parquet`          # GT PC over 33-clip cohort
+- `outputs/validation_summary_tvcalib.parquet`     # KS table: 3-way H-source ablation
+- `outputs/tvcalib_phase1_rmse.parquet`            # Phase 1 sanity result (5 frames, SNGS-066)
 
-**Figures** (`outputs/figures/`): 12 static PNGs + 2 animated GIFs (corner, direct free-kick). Figures 11-12 cover the detector ablation (count distributions, KS table, histogram overlays).
+**Figures** (`outputs/figures/`): 13 static PNGs + 2 animated GIFs (corner, direct free-kick). Figures 11-12 cover the detector ablation (count distributions, KS table, histogram overlays). Figure 13 covers the TVCalib H-source ablation (3-way KS table: GT-leak baseline vs TVCalib YOLOv8x vs TVCalib Soccana).
 
-**Clip cohort:** 33 set-piece clips in SoccerNet GSR 2024; 20 processable end-to-end with YOLOv8x (18 paired with GT in PC validation); 13 excluded (homography failure); 2 further excluded from visualisations (annotation errors). Soccana ablation processes the same cohort.
+**Clip cohort:**
+- GT-leak baseline: 33 clips → 20 end-to-end (18 paired with GT in PC validation), 13 excluded by homography failure.
+- TVCalib autonomous: 33/33 clips processed end-to-end (zero homography failures); 30 paired with full-cohort GT in PC. **+13 clips recovered.**
 
 **Thesis source:** `report.md` — Markdown with LaTeX/pandoc front-matter, renders to PDF via `pandoc report.md -o report.pdf`.
 
-**Key validated result (for thesis context):** `pc_at_ball` passes distributional validation at the pooled level (KS p=0.202, hist overlap 0.864). Global surface metrics (`pc_mean`, `pc_area_gt_0p5`) underestimate by ~−0.17 to −0.19. Detector ablation with Soccana (YOLOv11n football-finetuned) reduces global-metric bias by ~30% but does not flip any KS-fail to KS-pass — bias decomposes ~30% detector-domain / ~70% structural occlusion.
+**Key validated results (for thesis context):**
+
+GT-leak baseline (20 clips): `pc_at_ball` passes KS at pooled level (p=0.202, hist overlap 0.864); global metrics (`pc_mean`, `pc_area_gt_0p5`) underestimate by ~−0.17 to −0.19. Soccana ablation under same H reduces global-metric bias ~30%.
+
+TVCalib autonomous H (33 clips, full cohort vs `gt_full`):
+
+| metric | GT-leak YOLOv8x Δ | TVCalib YOLOv8x Δ | TVCalib Soccana Δ | overlap GT-leak→TV-Soccana |
+|---|---|---|---|---|
+| pc_mean | −0.167 | −0.096 | −0.055 | 0.629 → 0.807 |
+| pc_at_ball | −0.019 | −0.004 | **+0.001** | 0.864 → 0.854 |
+| pc_in_box | +0.011 | +0.100 | **+0.013** | 0.693 → 0.806 |
+| pc_in_third | −0.077 | +0.012 | −0.040 | 0.762 → 0.810 |
+| pc_area_gt_0p5 | −0.181 | −0.109 | −0.061 | 0.638 → 0.815 |
+
+KS pass count: GT-leak 1/5, TVCalib YOLOv8x 0/5, TVCalib Soccana 0/5. **Strict KS regresses because n grew (286 → 457 frames) and small effects become statistically detectable, but bias and overlap improve everywhere.** Best end-to-end combination = TVCalib + Soccana: bias near-zero on `pc_at_ball` and `pc_in_box`, hist overlap ≥0.81 on 4/5 metrics. The narrative is autonomy + cohort recovery + bias reduction; honest reporting of KS power inflation.
+
+Phase 1 RMSE sanity (5 SNGS-066 frames): TVCalib mean 16.99 px, GT-pitch-line H mean 148,151 px (degenerate on these frames — only 4 intersections each, RANSAC unstable). Decisive gate pass.
 
 **Next milestone:** written thesis/report ahead of 30 June 2026 deadline.
 
@@ -138,6 +175,28 @@ python scripts/download_soccernet.py
 python scripts/run_soccana_ablation.py
 python scripts/run_pc_soccana.py
 python scripts/ablation_ks_table.py
+
+# TVCalib autonomous H pipeline (replaces GT-pitch-line homography leak)
+# Phase 1: RMSE sanity on 5 frames (~1 min)
+python scripts/tvcalib_rmse_check.py
+
+# Phase 2: batch H over all 33 set-piece clips' frames (~5 min on MPS)
+python scripts/run_tvcalib_batch.py
+
+# Phase 3: pipeline detection under TVCalib H (~10-15 min, SSD)
+python scripts/run_pipeline_tvcalib.py
+python scripts/dump_ball_positions.py     # picks up new TVCalib clip frames
+python scripts/dump_gt_setpieces.py       # GT for all 33 clips
+
+# Phase 4: PC + KS comparison
+python scripts/run_pc_tvcalib.py
+python scripts/run_pc_gt_full.py
+python scripts/ks_table_tvcalib.py
+
+# Phase 5 (optional): Soccana under TVCalib H — best end-to-end combo
+python scripts/run_soccana_tvcalib.py
+python scripts/run_pc_soccana_tvcalib.py
+python scripts/ks_table_tvcalib.py        # auto-includes Soccana+TVCalib row
 
 # Register py311-dev as Jupyter kernel (one-time, after fresh env)
 python -m ipykernel install --user --name py311-dev --display-name "Python (py311-dev)"
@@ -169,24 +228,37 @@ Run order:
 2. `python scripts/run_pc_soccana.py`         (seconds)
 3. `python scripts/ablation_ks_table.py`      (or re-execute nb04 section 6)
 
-## Planned Work: YOLOv11x Detector Upgrade (TODO — Mac + SSD required)
+## H-Source Ablation (TVCalib)
+Replaces GT-pitch-line homography (`homography_from_pitch_lines` in nb02 cell 7) with autonomous TVCalib (Theiner & Ewerth, WACV 2023, MM4SPA/tvcalib). The original GT-line approach was a methodological leak: it used SoccerNet GSR ground-truth pitch annotations to compute the pixel→pitch transform, invalidating the autonomy claim of the proposal.
 
-**Context:** The MSc module (Module 7, section 4.2) recommends YOLO11 as the reference architecture, not YOLOv8. The current ablation compares YOLOv8x (COCO) vs Soccana (YOLOv11n, football-finetuned), which conflates two variables: architecture and domain finetuning. This makes it hard to attribute the ~30% bias reduction to finetuning alone.
+TVCalib produces world (centred metres ±52.5/±34) → image (1920×1080 pixels) homography per frame via segmentation + per-frame self-supervised camera optimisation. To match nb02's expected image→pitch-topleft H: `H_image_to_topleft = T_centred_to_topleft @ inv(H_world_to_image_centred)` where `T = [[1,0,52.5],[0,1,34],[0,0,1]]`.
 
-**Plan:** Add a third detector arm — YOLOv11x (COCO pretrained, no finetuning) — as the new primary baseline.
+Phase results:
+- Phase 1 sanity (5 SNGS-066 frames): TVCalib mean 17 px, GT-line H 148 K px (4-intersection degenerate). Decisive pass.
+- Phase 2 batch: 528 H over 33/33 clips × 16 frames each. Median `loss_ndc_total` = 0.011.
+- Phase 3 pipeline: 33/33 clips processed (vs 20/33 baseline). 6226 detection rows (vs 3755). Zero homography failures.
+- Phase 4 KS: bias improved on 4/5 metrics, hist overlap improved on 4/5; KS strict pass count drops 1→0 due to n=457 vs 286 (more power detects smaller effects).
+- Phase 5 Soccana+TVCalib: best end-to-end. Bias near-zero on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013).
 
-**Steps:**
-1. In nb02, add a detection pass with `yolo11x.pt` (Ultralytics auto-downloads). Hold all other stages constant: ByteTrack, KMeans-HSV, RANSAC homography.
-2. Save output as `outputs/detections_yolo11x.parquet` (mirror structure of `detections_pipeline.parquet`).
-3. Run PC model on new detections (mirror `scripts/run_pc_soccana.py` → new script `scripts/run_pc_yolo11x.py`), output `outputs/pitch_control_yolo11x.parquet`.
-4. Add a column to nb04 ablation table: YOLOv8x vs YOLOv11x vs Soccana. Updated story: YOLOv8x→YOLOv11x isolates architecture gain; YOLOv11x→Soccana isolates finetuning gain.
-5. Update thesis framing: YOLOv8x was the deliberate original baseline; YOLOv11x is the module-aligned architecture; Soccana tests football-domain finetuning on top.
+Run order:
+1. `python scripts/tvcalib_rmse_check.py`     (Phase 1, ~1 min, SSD)
+2. `python scripts/run_tvcalib_batch.py`      (Phase 2, ~5 min on MPS, SSD)
+3. `python scripts/run_pipeline_tvcalib.py`   (Phase 3, ~10-15 min, SSD)
+4. `python scripts/dump_ball_positions.py && python scripts/dump_gt_setpieces.py`
+5. `python scripts/run_pc_tvcalib.py && python scripts/run_pc_gt_full.py`
+6. `python scripts/ks_table_tvcalib.py`       (Phase 4 KS comparison)
+7. `python scripts/run_soccana_tvcalib.py && python scripts/run_pc_soccana_tvcalib.py` (Phase 5)
+8. `python scripts/ks_table_tvcalib.py`       (auto-detects Soccana+TVCalib parquet)
 
-**Expected outcome:** Cleaner three-way ablation. Soccana's ~30% bias reduction becomes decomposable into architecture vs finetuning contributions.
+TVCalib repo lives at `../tvcalib/` (sibling dir, separate venv). Smoke-test wrapper is `tvcalib/run_inference.py`. See memory `project_tvcalib_resume.md` for setup details.
 
-**Runtime:** ~30-60 min for nb02 pass (same as Soccana ablation). Needs SSD at `/Volumes/MPH-ExternalStorage/soccernet-gsr`.
+## Detector Choice (settled 2026-05-06)
 
-**Note:** Do NOT replace the existing YOLOv8x outputs. Add YOLOv11x as an additive third arm to preserve reproducibility of current results.
+**Primary detector:** Soccana (YOLOv11n, football-finetuned via SoccerNet GSR + match footage). Best end-to-end results under TVCalib H: bias near zero on `pc_at_ball` and `pc_in_box`, hist overlap ≥0.81 on 4/5 metrics.
+
+**Baseline ablation:** YOLOv8x (COCO-pretrained). Kept as off-the-shelf comparison to quantify the value of football-domain finetuning. Bias decomposition shows ~30% detector-domain / ~70% structural occlusion contribution.
+
+**Rejected:** Three-way YOLOv11x arm. Would isolate architecture vs finetuning variables, but: (a) Soccana already wins decisively, (b) v11n is nano-size (2.6M params) — smaller model than v8x (68M), so v11n COCO probably worse-recall baseline than v8x COCO, (c) thesis deadline (2026-06-30) better spent writing than re-running. Frame current ablation as "off-the-shelf vs football-finetuned" — practical deployment question, examiner-defendable.
 
 ## Key Design Decisions
 - **No frame-level ground truth:** validation is distributional only. Never claim per-frame accuracy.

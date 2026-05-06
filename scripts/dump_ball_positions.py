@@ -21,9 +21,13 @@ PITCH_L, PITCH_W = 105.0, 68.0
 def main() -> None:
     pipe = pd.read_parquet(OUT / "detections_pipeline.parquet")
     gt = pd.read_parquet(OUT / "detections_gt.parquet")
-    keys = (pd.concat([pipe[["split", "clip_id", "frame_idx"]],
-                       gt[["split", "clip_id", "frame_idx"]]])
-            .drop_duplicates().reset_index(drop=True))
+    sources = [pipe[["split", "clip_id", "frame_idx"]],
+               gt[["split", "clip_id", "frame_idx"]]]
+    tv_path = OUT / "detections_pipeline_tvcalib.parquet"
+    if tv_path.is_file():
+        tv = pd.read_parquet(tv_path)
+        sources.append(tv[["split", "clip_id", "frame_idx"]])
+    keys = pd.concat(sources).drop_duplicates().reset_index(drop=True)
 
     rows = []
     labels_cache: dict = {}
