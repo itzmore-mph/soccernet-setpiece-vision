@@ -11,6 +11,7 @@ delete /tmp/tvcalib_batch_out/calib.json to force re-stage only.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -20,7 +21,7 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TVCALIB_ROOT = PROJECT_ROOT.parent / "tvcalib"
-SSD_ROOT = Path("/Volumes/MPH-ExternalStorage/soccernet-gsr/gamestate-2024")
+SSD_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 FRAME_WINDOW = 15

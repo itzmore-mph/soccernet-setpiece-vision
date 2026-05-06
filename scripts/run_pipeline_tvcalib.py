@@ -14,6 +14,7 @@ Writes:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import cv2
@@ -24,7 +25,7 @@ from ultralytics import YOLO
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
-GSR_ROOT = Path("/Volumes/MPH-ExternalStorage/soccernet-gsr/gamestate-2024")
+GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 

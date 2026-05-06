@@ -8,12 +8,13 @@ Reason: nb03 currently parses Labels-GameState.json from the SSD per frame.
 Caching to parquet lets nb03 + nb04 run offline (without the SSD mounted).
 """
 import json
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-GSR = Path("/Volumes/MPH-ExternalStorage/soccernet-gsr/gamestate-2024")
+GSR = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 OUT = Path("outputs")
 PITCH_L, PITCH_W = 105.0, 68.0
 

@@ -46,7 +46,9 @@
       "Bash(rm -rf scripts/__pycache__)",
       "Bash(git commit *)",
       "Bash(git rm *)",
-      "Bash(git ls-files *)"
+      "Bash(git ls-files *)",
+      "Bash(python -m py_compile scripts/dump_ball_positions.py scripts/dump_gt_setpieces.py scripts/tvcalib_rmse_check.py scripts/run_tvcalib_batch.py scripts/run_pipeline_tvcalib.py scripts/run_soccana_ablation.py scripts/run_soccana_tvcalib.py)",
+      "Bash(ruff check *)"
     ],
     "additionalDirectories": [
       "/tmp"

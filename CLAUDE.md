@@ -69,6 +69,8 @@ Compare Pitch Control distributions across comparable set-piece types.
 | Thesis source | ./report.md |
 | SoccerNet data (Mac) | /Volumes/MPH-ExternalStorage/soccernet-gsr |
 
+SSD root resolved via `SOCCERNET_LOCAL_DIR` env var (fallback = Mac path above). Set in `.env` on Windows clone to point at local mount; all scripts and nb02/nb03/nb05 honour it.
+
 ## Repo State (as of 2026-05-06)
 All five notebooks exist and have been executed. Outputs directory is populated. Pipeline is functionally complete through validation.
 
@@ -277,3 +279,5 @@ TVCalib repo lives at `../tvcalib/` (sibling dir, separate venv). Smoke-test wra
 - Each notebook runs independently
 - All five notebooks run locally on MacBook Air M3; repo is also cloned on Windows (c:\Users\morhaaf\Dev\Git\) but execution is Mac-primary
 - outputs/ contains only Parquet files, never raw video
+- Never hardcode `Path("/Volumes/...")`. SSD root must be `Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"` so the Windows clone stays runnable via `.env`.
+- Notebook print statements display paths via `Path.relative_to(PROJECT_ROOT)`. Keeps committed cell outputs portable and clean of `/Users/mph/...` leaks.

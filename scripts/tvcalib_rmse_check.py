@@ -14,6 +14,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -24,7 +25,7 @@ import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TVCALIB_ROOT = PROJECT_ROOT.parent / "tvcalib"
-SSD_ROOT = Path("/Volumes/MPH-ExternalStorage/soccernet-gsr/gamestate-2024")
+SSD_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 CLIP = "SNGS-066"
 SPLIT = "train"
 FRAMES = [735, 738, 742, 746, 750]
