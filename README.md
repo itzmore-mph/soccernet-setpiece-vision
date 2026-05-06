@@ -9,17 +9,18 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 ## Overview
 
-A reproducible, open-source pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware. The pipeline targets set-piece situations (corners and direct free kicks), where broadcast cameras are near-static and all relevant players are in frame.
+Reproducible, open-source pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
 
 **Pipeline stages:**
-1. Player detection and tracking via YOLOv8x + ByteTrack (persistent player IDs across frames)
-2. Team assignment via KMeans on per-track mean HSV jersey colours (two-pass, once per clip)
-3. Pixel-to-pitch coordinate transformation via homography (OpenCV RANSAC)
-4. Pitch Control computation using Laurie Shaw's time-to-intercept model
+1. Player detection: YOLOv8x (off-the-shelf baseline) or Soccana YOLOv11n (football-finetuned, primary)
+2. Multi-object tracking: ByteTrack for persistent player IDs across frames
+3. Team assignment: KMeans on per-track mean HSV jersey colour, two-pass, once per clip
+4. Camera calibration: TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography from segmentation
+5. Pitch Control: Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m)
 
-**Validation:** Distributional comparison against SoccerNet GSR ground-truth annotations on 20 processable clips from the 2024 dataset (33 identified, 13 excluded due to homography failure, 2 excluded from visualisations due to annotation errors in the source data).
+**Validation:** Distributional comparison against SoccerNet GSR ground-truth annotations on 33 set-piece clips from the 2024 dataset. Distributional only — no frame-level matching, since SoccerNet GSR clips do not overlap with StatsBomb Euro 2024 matches.
 
-**Key result:** `pc_at_ball` (control at the ball location) passes distributional validation at the pooled level (KS p=0.061, histogram overlap 0.857). Global surface metrics are systematically underestimated due to YOLOv8 under-detection of defenders in crowded penalty-area crops.
+**Key result (TVCalib + Soccana, primary configuration):** 33/33 clips processed end-to-end (zero homography failures vs 13/33 dropped in GT-line baseline). Bias near zero on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013); histogram overlap ≥ 0.81 on 4/5 metrics. Strict KS regresses (1/5 → 0/5) due to inflated power on n=457 vs n=286 frames; bias and overlap improve everywhere. Full ablation table in `report.md`.
 
 ---
 
@@ -27,24 +28,44 @@ A reproducible, open-source pipeline that derives Pitch Control from broadcast v
 
 ```
 soccernet-setpiece-vision/
-├── notebooks/
-│   ├── 01_business_and_data_understanding.ipynb   # StatsBomb EDA, set-piece benchmarks
-│   ├── 02_data_preparation_and_pipeline.ipynb     # YOLO, KMeans, homography
-│   ├── 03_pitch_control.ipynb                     # Laurie Shaw TTI model, both tracks
-│   ├── 04_evaluation_and_validation.ipynb         # KS tests, bias diagnosis
-│   └── 05_visualizations.ipynb                    # Animated GIFs, broadcast stills
-├── outputs/
-│   ├── *.parquet                                  # All intermediate outputs
-│   └── figures/                                   # PNGs and animated GIFs
-├── scripts/
-│   ├── download_soccernet.py                      # Idempotent SoccerNet GSR download
-│   └── dump_ball_positions.py                     # Export ball positions for offline runs
+├── notebooks/                # Five CRISP-DM phases, run in order 01 → 05
+│   ├── 01_business_and_data_understanding.ipynb
+│   ├── 02_data_preparation_and_pipeline.ipynb
+│   ├── 03_pitch_control.ipynb
+│   ├── 04_evaluation_and_validation.ipynb
+│   └── 05_visualizations.ipynb
+├── scripts/                  # Reproducibility scripts (run after notebooks for ablations)
+│   ├── download_soccernet.py
+│   ├── dump_ball_positions.py
+│   ├── dump_gt_setpieces.py
+│   ├── repair_setpieces_freeze_frames.py
+│   │
+│   ├── # Detector ablation (YOLOv8x vs Soccana under GT-line H)
+│   ├── run_soccana_ablation.py
+│   ├── run_pc_soccana.py
+│   ├── compare_detectors.py
+│   ├── ablation_ks_table.py
+│   │
+│   ├── # TVCalib autonomous H pipeline (replaces GT-line homography leak)
+│   ├── tvcalib_rmse_check.py        # Phase 1: 5-frame sanity vs GT-line H
+│   ├── run_tvcalib_batch.py         # Phase 2: batch H over 33 clips × 16 frames
+│   ├── run_pipeline_tvcalib.py      # Phase 3: YOLOv8x detections under TVCalib H
+│   ├── run_pc_tvcalib.py            # Phase 4: PC for YOLOv8x + TVCalib
+│   ├── run_pc_gt_full.py            # Phase 4: GT PC over 33-clip cohort
+│   ├── ks_table_tvcalib.py          # Phase 4: 3-way KS table
+│   ├── run_soccana_tvcalib.py       # Phase 5: Soccana detections under TVCalib H
+│   └── run_pc_soccana_tvcalib.py    # Phase 5: PC for Soccana + TVCalib (primary config)
+├── outputs/                  # All Parquet outputs + figures/
+├── docs/
 ├── CITATION.cff
 ├── CLAUDE.md
 ├── LICENSE
-├── report.md
-└── requirements.txt
+├── README.md
+├── report.md                 # Thesis source (pandoc → PDF)
+└── requirements.txt          # pip freeze of py311-dev (lock snapshot, not curated)
 ```
+
+Video data lives on an external SSD (`SOCCERNET_LOCAL_DIR`), never in the repo. TVCalib lives in a sibling directory `../tvcalib/` with its own venv.
 
 ---
 
@@ -55,14 +76,40 @@ conda activate py311-dev
 jupyter lab
 ```
 
-SoccerNet GSR data is stored on an external SSD and not committed to the repository. Set `SOCCERNET_LOCAL_DIR` in `.env` before downloading.
-
 ```bash
 # Download SoccerNet GSR (requires SOCCERNET_PASSWORD in .env)
 python scripts/download_soccernet.py
 ```
 
-Run notebooks in order (01 → 05). Outputs are cached as Parquet so nb03–nb05 can be re-executed offline.
+Notebooks run in order (01 → 05). Outputs cached as Parquet so nb03–nb05 re-execute offline. Soccana weights auto-fetched from HuggingFace (`Adit-jain/soccana`) on first ablation run; YOLOv8x weights auto-downloaded by ultralytics.
+
+---
+
+## Reproducing the Ablations
+
+After running the five notebooks, two ablations extend the analysis:
+
+**Detector ablation (YOLOv8x vs Soccana, fixed H):**
+```bash
+python scripts/run_soccana_ablation.py
+python scripts/run_pc_soccana.py
+python scripts/ablation_ks_table.py
+```
+
+**H-source ablation (GT-line baseline vs TVCalib autonomous):**
+```bash
+python scripts/tvcalib_rmse_check.py            # Phase 1 sanity
+python scripts/run_tvcalib_batch.py             # Phase 2 batch H
+python scripts/run_pipeline_tvcalib.py          # Phase 3 detections
+python scripts/dump_ball_positions.py
+python scripts/dump_gt_setpieces.py
+python scripts/run_pc_tvcalib.py
+python scripts/run_pc_gt_full.py
+python scripts/ks_table_tvcalib.py              # Phase 4 KS
+python scripts/run_soccana_tvcalib.py           # Phase 5 best combo
+python scripts/run_pc_soccana_tvcalib.py
+python scripts/ks_table_tvcalib.py              # auto-includes Soccana row
+```
 
 ---
 
@@ -71,16 +118,17 @@ Run notebooks in order (01 → 05). Outputs are cached as Parquet so nb03–nb05
 | System | Convention |
 |---|---|
 | StatsBomb | 120 yards × 80 yards, origin top-left |
-| Pipeline | 105 m × 68 m, origin top-left |
+| Pipeline / mplsoccer | 105 m × 68 m, origin top-left |
 | SoccerNet GSR `bbox_pitch` | centred origin (±52.5 m, ±34 m) |
 
-Conversion: `x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`
+`x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`
+GSR centred → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`
 
 ---
 
 ## Citations
 
-This project builds on the following works. See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
+See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
 ### SoccerNet Game State Reconstruction (dataset and annotations)
 
@@ -96,6 +144,17 @@ This project builds on the following works. See [CITATION.cff](CITATION.cff) for
   month   = {Jun},
   year    = {2024},
   address = {Seattle, WA, USA},
+}
+```
+
+### TVCalib (autonomous camera calibration)
+
+```bibtex
+@inproceedings{Theiner2023TVCalib,
+  title     = {{TVCalib}: Camera Calibration for Sports Field Registration in Soccer},
+  author    = {Theiner, Jonas and Ewerth, Ralph},
+  booktitle = {Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  year      = {2023},
 }
 ```
 
@@ -117,13 +176,13 @@ Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Re
 
 ### Other dependencies
 
-- Jocher, G. et al. (2023). *Ultralytics YOLOv8*. https://github.com/ultralytics/ultralytics
+- Jocher, G. et al. (2023). *Ultralytics YOLOv8 / YOLOv11*. https://github.com/ultralytics/ultralytics
+- Adit Jain. *Soccana: YOLOv11n football detector*. HuggingFace: `Adit-jain/soccana`.
 - StatsBomb (2024). *StatsBomb Open Data*. https://github.com/statsbomb/open-data
 - Spearman, W. (2018). Beyond Expected Goals. MIT Sloan Sports Analytics Conference.
-- Nie, X. et al. (2021). A robust and efficient framework for sports-field registration. WACV 2021.
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+[MIT License](LICENSE).
