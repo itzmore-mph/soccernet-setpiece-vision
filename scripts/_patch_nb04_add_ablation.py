@@ -11,7 +11,7 @@ from pathlib import Path
 NB = Path(__file__).resolve().parent.parent / "notebooks" / "04_evaluation_and_validation.ipynb"
 MARKER = "## 6. Detector Ablation"
 
-MD_SRC = '''## 6. Detector Ablation — YOLOv8x vs Soccana
+MD_SRC = '''## 6. Detector Ablation: YOLOv8x vs Soccana
 
 Replaces the COCO-pretrained YOLOv8x detector with **Soccana** (`Adit-jain/soccana` on HuggingFace), a YOLOv11n model fine-tuned on SoccerNet plus additional football footage. All other pipeline stages (homography, ByteTrack, KMeans-HSV team assignment, Laurie Shaw pitch-control model) are held constant.
 

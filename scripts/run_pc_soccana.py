@@ -7,7 +7,7 @@ Reads:
 Writes:
     outputs/pitch_control_soccana.parquet  (track='soccana', schema matches pitch_control.parquet)
 
-All Laurie Shaw / Spearman model parameters identical to nb03 — locked for
+All Laurie Shaw / Spearman model parameters identical to nb03, locked for
 reproducibility. Any change here invalidates the nb04 ablation comparison.
 """
 

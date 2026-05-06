@@ -2,7 +2,7 @@
 
 **Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis**
 
-Master's Final Project — MSc AI Applied to Sports, Sports Data Campus
+Master's Final Project, MSc AI Applied to Sports, Sports Data Campus
 Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 ---

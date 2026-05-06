@@ -27,7 +27,7 @@ Thumbs.db
 .venv/
 venv/
 
-# Data — never commit. Lives on external SSD.
+# Data: never commit. Lives on external SSD.
 /Volumes/
 data/raw/
 data/interim/

@@ -5,7 +5,8 @@
       "Bash(git commit -m ' *)",
       "Bash(winget list *)",
       "PowerShell(python \"c:\\\\Users\\\\morhaaf\\\\Dev\\\\Git\\\\soccernet-setpiece-vision\\\\scripts\\\\gen_figure10.py\")",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python -c ' *)"
     ]
   }
 }
