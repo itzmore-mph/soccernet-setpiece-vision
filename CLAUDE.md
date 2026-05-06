@@ -86,6 +86,8 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `scripts/compare_detectors.py` — detection-count ablation (YOLOv8x vs Soccana vs GT); writes `outputs/ablation_detector_summary.parquet` + figure 11.
 - `scripts/ablation_ks_table.py` — standalone KS table for the PC ablation; writes `outputs/ablation_ks_summary.parquet` + figure 12.
 - `scripts/repair_setpieces_freeze_frames.py` — re-fetches StatsBomb 360 freeze frames per match if nb01 produced 0% coverage. Use only if `outputs/setpieces.parquet` shows empty `freeze_frame` arrays.
+- `scripts/_patch_nb01_cell15.py` — internal helper that patches a specific cell in nb01 (not for general use).
+- `scripts/_patch_nb04_add_ablation.py` — internal helper that adds the detector ablation section to nb04 (not for general use).
 
 **Outputs (all Parquet):**
 - `outputs/ball_positions.parquet`
@@ -147,11 +149,8 @@ python -m ipykernel install --user --name py311-dev --display-name "Python (py31
 - HuggingFace (if used): `~/.cache/huggingface/`
 
 ## Editable Packages
-Two sibling repos are installed as editable packages in `py311-dev`:
-- `broadcast-to-tactics` at `/Users/mph/Dev/itzmore-mph/MAIS-projects/final-master-project/broadcast-to-tactics`
-- `setpiece-pipeline` (this repo itself, installed as `setpiece-pipeline==0.1.0`)
-
-If imports from `broadcast_to_tactics` fail, check that editable install is active: `pip install -e ../broadcast-to-tactics`.
+- `setpiece-pipeline` — this repo itself, installed as `setpiece-pipeline==0.1.0` (`pip install -e .`)
+- `broadcast-to-tactics` — sibling repo at `/Users/mph/Dev/itzmore-mph/MAIS-projects/final-master-project/broadcast-to-tactics` (Mac path). If imports from `broadcast_to_tactics` fail: `pip install -e ../broadcast-to-tactics`.
 
 ## Pipeline Architecture
 Each notebook is a self-contained CRISP-DM phase:
@@ -181,9 +180,9 @@ Run order:
 ## Rules
 - Everything inline in notebooks, no separate src/ modules
 - Use `py311-dev` conda env exclusively. Do NOT use `.venv` — observed kernel/version drift between the two breaks ultralytics weight loading on PyTorch ≥2.6.
-- Verify `which python` resolves to `/Users/mph/miniconda3/envs/py311-dev/bin/python` before running scripts.
+- On Mac: verify `which python` resolves to `/Users/mph/miniconda3/envs/py311-dev/bin/python` before running scripts.
 - All paths relative to project root except SoccerNet data on external SSD
 - .env for secrets (SOCCERNET_PASSWORD), never hardcoded
 - Each notebook runs independently
-- All four notebooks run locally on MacBook Air M3
+- All five notebooks run locally on MacBook Air M3; repo is also cloned on Windows (c:\Users\morhaaf\Dev\Git\) but execution is Mac-primary
 - outputs/ contains only Parquet files, never raw video
