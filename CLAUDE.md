@@ -169,6 +169,25 @@ Run order:
 2. `python scripts/run_pc_soccana.py`         (seconds)
 3. `python scripts/ablation_ks_table.py`      (or re-execute nb04 section 6)
 
+## Planned Work: YOLOv11x Detector Upgrade (TODO — Mac + SSD required)
+
+**Context:** The MSc module (Module 7, section 4.2) recommends YOLO11 as the reference architecture, not YOLOv8. The current ablation compares YOLOv8x (COCO) vs Soccana (YOLOv11n, football-finetuned), which conflates two variables: architecture and domain finetuning. This makes it hard to attribute the ~30% bias reduction to finetuning alone.
+
+**Plan:** Add a third detector arm — YOLOv11x (COCO pretrained, no finetuning) — as the new primary baseline.
+
+**Steps:**
+1. In nb02, add a detection pass with `yolo11x.pt` (Ultralytics auto-downloads). Hold all other stages constant: ByteTrack, KMeans-HSV, RANSAC homography.
+2. Save output as `outputs/detections_yolo11x.parquet` (mirror structure of `detections_pipeline.parquet`).
+3. Run PC model on new detections (mirror `scripts/run_pc_soccana.py` → new script `scripts/run_pc_yolo11x.py`), output `outputs/pitch_control_yolo11x.parquet`.
+4. Add a column to nb04 ablation table: YOLOv8x vs YOLOv11x vs Soccana. Updated story: YOLOv8x→YOLOv11x isolates architecture gain; YOLOv11x→Soccana isolates finetuning gain.
+5. Update thesis framing: YOLOv8x was the deliberate original baseline; YOLOv11x is the module-aligned architecture; Soccana tests football-domain finetuning on top.
+
+**Expected outcome:** Cleaner three-way ablation. Soccana's ~30% bias reduction becomes decomposable into architecture vs finetuning contributions.
+
+**Runtime:** ~30-60 min for nb02 pass (same as Soccana ablation). Needs SSD at `/Volumes/MPH-ExternalStorage/soccernet-gsr`.
+
+**Note:** Do NOT replace the existing YOLOv8x outputs. Add YOLOv11x as an additive third arm to preserve reproducibility of current results.
+
 ## Key Design Decisions
 - **No frame-level ground truth:** validation is distributional only. Never claim per-frame accuracy.
 - **Coordinate systems:** StatsBomb is yards (120x80); pipeline works in metres (105x68). Conversion is `x_m = x_sb * (105/120)`, `y_m = y_sb * (68/80)`. Apply before any geometry.
