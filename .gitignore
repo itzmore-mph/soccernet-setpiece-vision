@@ -39,3 +39,4 @@ example/
 
 # Outputs: keep parquet + figures (small, reproducible-from-notebooks)
 # Add specific ignores here if any output gets large.
+.claude/settings.local.json

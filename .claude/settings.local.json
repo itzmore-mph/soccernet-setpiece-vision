@@ -44,7 +44,9 @@
       "Bash(ln -sf ../yolov8x.pt notebooks/yolov8x.pt)",
       "Bash(rm scripts/_patch_nb01_cell15.py scripts/_patch_nb04_add_ablation.py)",
       "Bash(rm -rf scripts/__pycache__)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(git ls-files *)"
     ],
     "additionalDirectories": [
       "/tmp"
