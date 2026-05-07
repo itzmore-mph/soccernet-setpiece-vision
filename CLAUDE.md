@@ -89,8 +89,6 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `scripts/compare_detectors.py` — detection-count ablation (YOLOv8x vs Soccana vs GT); writes `outputs/ablation_detector_summary.parquet` + figure 11.
 - `scripts/ablation_ks_table.py` — standalone KS table for the PC ablation; writes `outputs/ablation_ks_summary.parquet` + figure 12.
 - `scripts/repair_setpieces_freeze_frames.py` — re-fetches StatsBomb 360 freeze frames per match if nb01 produced 0% coverage. Use only if `outputs/setpieces.parquet` shows empty `freeze_frame` arrays.
-- `scripts/_patch_nb01_cell15.py` — internal helper that patches a specific cell in nb01 (not for general use).
-- `scripts/_patch_nb04_add_ablation.py` — internal helper that adds the detector ablation section to nb04 (not for general use).
 - `scripts/tvcalib_rmse_check.py` — Phase 1 sanity: project GT player `bbox_pitch` foot points through TVCalib H vs GT-pitch-line H, measure pixel RMSE on 5 SNGS-066 frames. Writes `outputs/tvcalib_phase1_rmse.parquet`. Needs SSD + `tvcalib/.venv/` set up.
 - `scripts/run_tvcalib_batch.py` — Phase 2 batch: stage all set-piece frames (33 clips × 16 = 528) into `/tmp/tvcalib_batch/`, invoke `tvcalib/run_inference.py` once, parse `calib.json` -> `outputs/homographies_tvcalib.parquet`. Idempotent; reuses `/tmp/tvcalib_batch_out/calib.json` if present.
 - `scripts/run_pipeline_tvcalib.py` — Phase 3 pipeline run: mirrors nb02 cell 8 with TVCalib H lookup replacing `homography_from_pitch_lines`. Writes `outputs/detections_pipeline_tvcalib.parquet`. Needs SSD.

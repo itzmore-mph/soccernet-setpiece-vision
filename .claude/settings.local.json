@@ -48,7 +48,12 @@
       "Bash(git rm *)",
       "Bash(git ls-files *)",
       "Bash(python -m py_compile scripts/dump_ball_positions.py scripts/dump_gt_setpieces.py scripts/tvcalib_rmse_check.py scripts/run_tvcalib_batch.py scripts/run_pipeline_tvcalib.py scripts/run_soccana_ablation.py scripts/run_soccana_tvcalib.py)",
-      "Bash(ruff check *)"
+      "Bash(ruff check *)",
+      "Bash(grep -nE \"^#{1,3} \" report.md)",
+      "Bash(pandoc --version)",
+      "Bash(brew list *)",
+      "Bash(grep -nE ' $' report.md)",
+      "Bash(/usr/bin/grep -nE '\\\\b\\([a-z]+\\) \\\\1\\\\b' report.md)"
     ],
     "additionalDirectories": [
       "/tmp"

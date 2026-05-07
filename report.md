@@ -53,7 +53,7 @@ Submission Deadline: 30 June 2026
 
 **Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations. Of 33 candidate clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset, all 33 are processable end-to-end under autonomous TVCalib calibration (the GT-pitch-line baseline excluded 13 of 33 due to insufficient pitch-line coverage; this exclusion drove the original methodological motivation for replacing it). A further 2 clips were identified as annotation errors during visual inspection (one Corner showed a mid-game scene; one Direct free-kick showed a throw-in) and excluded from visualisations. Validation is distributional: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap.
 
-**Results.** The final pipeline (Soccana + TVCalib) achieves near-zero bias on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013) versus full-cohort GT. Histogram overlap is ≥0.81 on 4/5 metrics. Bias falls on 4/5 metrics relative to the GT-leak YOLOv8x baseline. KS strict pass count (α=0.05) is 0/5 versus 1/5 baseline, but the regression is driven by statistical power (n grew from 286 to 457 paired frames), not by worse fit — bias and overlap improve. The ablation isolates ~30% of residual bias to detector domain mismatch (closed by Soccana finetuning) and ~70% to structural broadcast-angle occlusion. The bias is structural and explainable, not random.
+**Results.** The final pipeline (Soccana + TVCalib) achieves near-zero bias on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013) versus full-cohort GT. Histogram overlap is ≥0.81 on 4/5 metrics. Bias falls on 4/5 metrics relative to the GT-leak YOLOv8x baseline. KS strict pass count (α=0.05) is 0/5 versus 1/5 baseline, but the regression is driven by statistical power (n grew from 286 to 457 paired frames), not by worse fit: bias and overlap improve. The ablation isolates ~30% of residual bias to detector domain mismatch (closed by Soccana finetuning) and ~70% to structural broadcast-angle occlusion. The bias is structural and explainable, not random.
 
 **Impact.** Any team with broadcast access and a Python environment can run this pipeline. The approach is directly applicable to competitions where commercial tracking is absent but video is available.
 
@@ -226,17 +226,25 @@ CRISP-DM is appropriate here because the project is not model-selection-heavy (t
 2. All tactically relevant players are in frame, with no occlusion from wide angles.
 3. The ball position is fixed and can be pulled from the event feed, so no ball tracking is required.
 
-Set pieces account for approximately 30% of goals in major tournaments (StatsBomb, 2024), making the tactical output directly decision-relevant.
+Set pieces account for approximately 30% of goals in major tournaments (StatsBomb, 2024), making the tactical output directly decision-relevant. Figure 4 shows that the majority of Euro 2024 set pieces produce no shot within 10 s, confirming that defensive-organisation metrics like Pitch Control, rather than shot counts, capture the analytically relevant variable.
+
+![Figure 4. Outcome distribution within 10 seconds of set-piece execution, Euro 2024.](outputs/figures/04_setpiece_outcomes_10s.png)
 
 ### 7.2 Data Understanding
 
-**StatsBomb Euro 2024 (nb01).** 51 matches across UEFA Euro 2024 (competition_id=55, season_id=282) were loaded via `statsbombpy`. From these, 706 set-piece events were extracted: 508 corners and 198 direct free kicks. StatsBomb 360 freeze-frame coverage was 64.2% (453 / 706 events). The Euro 2024 dataset provides the domain benchmark: distribution of player counts per freeze frame, ball locations, and outcome rates within 10 seconds of execution.
+**StatsBomb Euro 2024 (nb01).** 51 matches across UEFA Euro 2024 (competition_id=55, season_id=282) were loaded via `statsbombpy`. From these, 706 set-piece events were extracted: 508 corners and 198 direct free kicks (Figure 1). StatsBomb 360 freeze-frame coverage was 64.2% (453 / 706 events). The Euro 2024 dataset provides the domain benchmark: distribution of player counts per freeze frame, ball locations, and outcome rates within 10 seconds of execution.
+
+![Figure 1. StatsBomb Euro 2024 set-piece counts by type.](outputs/figures/01_setpiece_counts.png)
 
 Key EDA findings from nb01:
-- Corners cluster tightly at corner flag coordinates (105, 0), (105, 68), (0, 0), (0, 68) as expected.
-- Direct free kicks span a wide range of pitch locations but concentrate in the attacking third (x_m > 70).
-- Freeze-frame coverage drops to zero for many events; StatsBomb 360 is not available for every event.
+- Corners cluster tightly at corner flag coordinates (105, 0), (105, 68), (0, 0), (0, 68) as expected (Figure 2).
+- Direct free kicks span a wide range of pitch locations but concentrate in the attacking third (x_m > 70), also visible in Figure 2.
+- Freeze-frame coverage drops to zero for many events; StatsBomb 360 is not available for every event. Figure 3 shows the distribution of player counts per available freeze frame.
 - 10-second outcome analysis: the majority of set pieces result in no shot within the window, confirming that defensive organisation (captured by Pitch Control) is the primary analytical variable, not just shot count.
+
+![Figure 2. Set-piece locations on the StatsBomb pitch (105 × 68 m), separated by type.](outputs/figures/02_setpiece_locations.png)
+
+![Figure 3. Distribution of players per freeze frame, Euro 2024 360 data.](outputs/figures/03_players_per_frame.png)
 
 **SoccerNet GSR (nb02).** 33 clips were identified across the four dataset splits (train/valid/test/challenge) with `action_class` in {Corner, Direct free-kick}: 17 corners and 16 direct free kicks. Each clip is a broadcast video segment; the `action_position` field gives the frame index of the set-piece moment. The dataset includes per-frame player annotations (`bbox_pitch`, metric-centred coordinates) and pitch-line annotations used for homography.
 
@@ -281,6 +289,10 @@ The core of nb02 is the parallel construction of two player coordinate tracks fo
 
 **Attacking team assignment.** Per frame, the team whose nearest player is closest to the ball is designated the attacking team. This is consistent with set-piece context: the team executing the set piece is proximate to the ball.
 
+Figure 7 shows a representative paired Pitch Control surface for a single set-piece frame: pipeline output (left) against ground-truth output (right) under identical model parameters, demonstrating that the surfaces are visually comparable while differing in defender coverage.
+
+![Figure 7. Sample paired Pitch Control surface, pipeline (left) vs ground truth (right), single set-piece frame.](outputs/figures/07_pc_sample_pipeline_vs_gt.png)
+
 **Summary metrics computed per frame:**
 
 | Metric | Definition |
@@ -305,6 +317,10 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 | `pc_in_third` | 0.221 | <0.001 | 0.763 | 0.561 | 0.634 | Yes |
 | `pc_area_gt_0p5` | 0.316 | <0.001 | 0.606 | 0.484 | 0.630 | Yes |
 
+Figure 8 overlays pipeline and GT histograms for each metric, making the per-metric distributional gap visually explicit. `pc_at_ball` (top centre) shows near-complete overlap, consistent with the KS pass; the global metrics show systematic leftward shift.
+
+![Figure 8. Histogram overlays of pipeline vs ground-truth Pitch Control summary metrics.](outputs/figures/08_histogram_overlays.png)
+
 **Per-frame paired results (n=261 paired frames):**
 
 | Metric | Pearson r | Spearman r | MAE | Bias |
@@ -315,7 +331,19 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 | `pc_in_third` | −0.107 | −0.073 | 0.236 | −0.066 |
 | `pc_area_gt_0p5` | −0.170 | −0.214 | 0.321 | −0.145 |
 
-**Bias diagnosis (nb04 §4b).** GT annotations provide more player detections per frame than the pipeline (4,295 GT rows vs. 4,146 pipeline rows across 20 identical clips). In the Shaw model, additional defenders compress attacking PC uniformly across the surface. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count, which is why it is the only metric to pass KS. The `10_defenders_vs_pc_mean.png` figure confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
+Figures 5 and 9 show the per-frame paired scatter; the `pc_at_ball` panel exhibits the strongest positive trend, consistent with its higher Pearson and Spearman correlations.
+
+![Figure 5. Paired pipeline vs ground-truth values per frame for each Pitch Control metric.](outputs/figures/05_pipeline_vs_gt_scatter.png)
+
+![Figure 9. Paired scatter focused on per-action-class stratification.](outputs/figures/09_paired_scatter.png)
+
+Figure 6 shows the per-frame defender count distribution for pipeline and GT tracks, which directly motivates the bias diagnosis below.
+
+![Figure 6. Distribution of detected players per frame, pipeline vs ground truth (20 clips).](outputs/figures/06_players_per_frame_dist.png)
+
+**Bias diagnosis (nb04 §4b).** GT annotations provide more player detections per frame than the pipeline (4,295 GT rows vs. 4,146 pipeline rows across 20 identical clips). In the Shaw model, additional defenders compress attacking PC uniformly across the surface. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count, which is why it is the only metric to pass KS. Figure 10 confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
+
+![Figure 10. Per-frame defender count vs `pc_mean`, pipeline (red) and ground truth (blue).](outputs/figures/10_defenders_vs_pc_mean.png)
 
 ### 7.6 Deployment
 
@@ -339,7 +367,9 @@ Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_
 
 Global metrics (`pc_mean`, `pc_area_gt_0p5`) are systematically underestimated by 0.13–0.15. The bias is structural: YOLOv8 detects fewer defenders per frame than GT annotations, and the Shaw model is sensitive to total defender count in a predictable direction, where more defenders compress attacking control across the whole surface.
 
-This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops, typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
+This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops, typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. Figure 11 quantifies this gap across detectors; YOLOv8x and Soccana both underdetect relative to GT, with Soccana closer to GT counts. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
+
+![Figure 11. Per-frame detection counts: YOLOv8x vs Soccana vs GT.](outputs/figures/11_ablation_detector_counts.png)
 
 The `pc_in_box` metric shows a slight positive bias (pipeline 0.594 vs GT 0.571, bias +0.036) which is directionally reversed. This is consistent with fewer defenders being detected *inside* the box: the pipeline overestimates attacking control in the most contested zone because it is missing defenders there.
 
@@ -377,7 +407,13 @@ To close the autonomy gap, the GT-pitch-line homography was replaced with TVCali
 | `pc_in_third` | −0.077 | +0.012 | −0.040 | 0.762 → 0.810 |
 | `pc_area_gt_0p5` | −0.181 | −0.109 | −0.061 | 0.638 → 0.815 |
 
-Bias falls on 4/5 metrics under TVCalib; histogram overlap rises on 4/5. The Soccana+TVCalib combination (autonomous H + football-finetuned detector) achieves bias near zero on `pc_at_ball` and `pc_in_box`.
+Bias falls on 4/5 metrics under TVCalib; histogram overlap rises on 4/5. The Soccana+TVCalib combination (autonomous H + football-finetuned detector) achieves bias near zero on `pc_at_ball` and `pc_in_box`. Figure 12a shows histogram overlays for the YOLOv8x vs Soccana ablation (under the GT-leak H, holding all else constant); Figure 12b is the corresponding KS table. Figure 13 is the three-way KS comparison once TVCalib replaces the GT-leak H.
+
+![Figure 12a. YOLOv8x vs Soccana detector ablation: histogram overlays per Pitch Control metric.](outputs/figures/12_ablation_histograms.png)
+
+![Figure 12b. YOLOv8x vs Soccana detector ablation: KS test summary.](outputs/figures/12_ablation_ks_table.png)
+
+![Figure 13. Three-way KS comparison: GT-leak YOLOv8x vs TVCalib YOLOv8x vs TVCalib Soccana, against full-cohort GT.](outputs/figures/13_ks_table_tvcalib.png)
 
 **KS pass count (strict α=0.05) regresses** from 1/5 (GT-leak) to 0/5 (TVCalib). The reason is statistical power, not worse fit: cohort frames went from 286 (20 clips) to 457 (30 paired clips), and KS detects smaller distributional differences with larger n. The bias-and-overlap evidence shows distributions are objectively closer; the strict pass-count metric is cohort-confounded and should be reported alongside the bias and overlap diagnostics, not in isolation.
 
@@ -389,7 +425,7 @@ Bias falls on 4/5 metrics under TVCalib; histogram overlap rises on 4/5. The Soc
 
 ### 9.1 Key Findings
 
-1. **`pc_at_ball` passes distributional validation at the pooled level** (KS p=0.061, overlap 0.857, MAE 0.122), though stratified tests by action class reject H0 (corners p=0.016, direct free kicks p=0.011). The pipeline preserves the most decision-relevant set-piece signal with the caveat that subgroup distributions diverge.
+1. **`pc_at_ball` passes distributional validation at the pooled level** on the 20-clip GT-leak baseline (KS p=0.061, overlap 0.857, MAE 0.122), though stratified tests by action class reject H0 (corners p=0.016, direct free kicks p=0.011). Under the autonomous TVCalib + Soccana configuration on the full 33-clip cohort, bias collapses to Δ=+0.001 with overlap 0.854 (see §8.5). The pipeline preserves the most decision-relevant set-piece signal with the caveat that subgroup distributions diverge.
 2. **Global surface metrics are systematically biased** by YOLOv8 under-detection of defenders, producing underestimates of 0.13–0.15. The mechanism is identified, quantified, and consistent with the model's mathematical structure.
 3. **ByteTrack integration** eliminates per-frame team-label instability by assigning persistent player IDs, enabling KMeans team assignment to run once per clip on aggregated jersey colour evidence rather than per-frame.
 4. **SoccerNet GSR annotation quality is imperfect:** 2 of 20 processable clips carried incorrect `action_class` labels (a mid-game scene annotated as Corner; a throw-in annotated as Direct free-kick), identified through visual inspection during visualisation.
@@ -400,7 +436,7 @@ Bias falls on 4/5 metrics under TVCalib; histogram overlap rises on 4/5. The Soc
 
 All six project objectives were met. The pipeline produces Pitch Control from broadcast frames (objectives 1–3), with ByteTrack adding persistent player identity for more stable team assignment. The pipeline passes distributional validation on the primary metric (objective 4), provides a mechanistic bias explanation (objective 5), and runs end-to-end on a consumer laptop (objective 6).
 
-The honest limit of the current work is data scale: 20 processable clips is a small sample. Conclusions about distributional agreement should not be generalised beyond this clip set without further validation.
+The honest limit of the current work is data scale: 33 processable clips under TVCalib (20 under the GT-leak baseline) is a small sample. Conclusions about distributional agreement should not be generalised beyond this clip set without further validation.
 
 ### 9.3 Future Work
 
@@ -424,7 +460,7 @@ The honest limit of the current work is data scale: 20 processable clips is a sm
 
 Decroos, T., Bransen, L., Van Haaren, J., & Davis, J. (2019). Actions speak louder than goals: Valuing player actions in football. *Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining*, 1851–1861. https://doi.org/10.1145/3292500.3330758
 
-Theiner, J., & Ewerth, R. (2023). TVCalib: Camera Calibration for Sports Field Registration in Soccer. *Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)*, 1166–1175. https://arxiv.org/abs/2207.11709 — code: https://github.com/MM4SPA/tvcalib
+Theiner, J., & Ewerth, R. (2023). TVCalib: Camera Calibration for Sports Field Registration in Soccer. *Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)*, 1166–1175. https://arxiv.org/abs/2207.11709. Code: https://github.com/MM4SPA/tvcalib
 
 Deliège, A., Cioppa, A., Giancola, S., Seikavand, M. J., Magera, F., Jordi, B., Ghanem, B., & Van Droogenbroeck, M. (2021). SoccerNet-v2: A dataset and benchmarks for holistic understanding of broadcast soccer videos. *Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)*, 4508–4519.
 
@@ -524,3 +560,24 @@ All parameters below are locked for reproducibility. Any deviation invalidates t
 ### Appendix D: Validation Summary Table (Full)
 
 See `outputs/validation_summary.parquet` for the complete per-metric, per-action-class breakdown (15 rows: 5 metrics × 3 strata). The table is produced by nb04 §2 and is reproducible by re-running that notebook with the cached `pitch_control.parquet`.
+
+### Appendix E: Broadcast Stills and Animated Surfaces
+
+Broadcast still overlays paired with the corresponding Pitch Control surface are produced for four representative clips (two corners, two direct free kicks). Figures 14a-14d below show pipeline output overlaid on the source frame at `action_position`.
+
+![Figure 14a. SNGS-125 corner: broadcast still + Pitch Control overlay.](outputs/figures/still_corner_SNGS-125.png)
+
+![Figure 14b. SNGS-140 corner: broadcast still + Pitch Control overlay.](outputs/figures/still_corner_SNGS-140.png)
+
+![Figure 14c. SNGS-131 direct free kick: broadcast still + Pitch Control overlay.](outputs/figures/still_direct_free-kick_SNGS-131.png)
+
+![Figure 14d. SNGS-198 direct free kick: broadcast still + Pitch Control overlay.](outputs/figures/still_direct_free-kick_SNGS-198.png)
+
+Animated GIFs of the Pitch Control surface evolving over the ±15 frame window (one per clip in the appendix set) are produced by nb05 and stored at:
+
+- `outputs/figures/anim_corner_SNGS-125.gif`
+- `outputs/figures/anim_corner_SNGS-140.gif`
+- `outputs/figures/anim_direct_free-kick_SNGS-131.gif`
+- `outputs/figures/anim_direct_free-kick_SNGS-198.gif`
+
+These animations do not embed in static PDF/DOCX exports and are referenced as supplementary material.
