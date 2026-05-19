@@ -41,3 +41,4 @@ example/
 # Add specific ignores here if any output gets large.
 .claude/settings.local.json
 report.pdf
+.claude/settings.local.json
