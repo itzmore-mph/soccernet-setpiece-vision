@@ -77,7 +77,8 @@
       "Bash(pandoc report.md -o report.pdf --pdf-engine=xelatex -V geometry:margin=2.5cm --metadata header-includes=\"\")",
       "Bash(pdftk report.pdf dump_data)",
       "Bash(pandoc report.md --pdf-engine=xelatex -V geometry:margin=2.5cm --metadata header-includes=\"\" -t latex)",
-      "Bash(grep -c \"\\\\\\\\\\\\\\\\newpage\\\\|\\\\\\\\\\\\\\\\section\\\\|\\\\\\\\\\\\\\\\subsection\")"
+      "Bash(grep -c \"\\\\\\\\\\\\\\\\newpage\\\\|\\\\\\\\\\\\\\\\section\\\\|\\\\\\\\\\\\\\\\subsection\")",
+      "Bash(curl -s \"https://huggingface.co/api/datasets/MaharshiJoshi/Football-event-samples\")"
     ],
     "additionalDirectories": [
       "/tmp"
