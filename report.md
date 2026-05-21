@@ -73,9 +73,9 @@ Submission Deadline: 30 June 2026
 
 **Solution.** This project delivers a reproducible, open-source computer vision pipeline that derives Pitch Control from broadcast video, requiring no proprietary tracking hardware. The pipeline detects and tracks players using **Soccana** (YOLOv11n, football-finetuned on SoccerNet GSR + match footage) combined with ByteTrack multi-object tracking, assigns stable team labels via per-track jersey colour clustering (KMeans on HSV values aggregated across frames), transforms pixel coordinates to metric pitch coordinates via **TVCalib** autonomous camera calibration, and computes attacking Pitch Control using Laurie Shaw's time-to-intercept model. An off-the-shelf detector baseline (YOLOv8x, COCO-pretrained) and a GT-pitch-line homography baseline are retained as ablation arms to isolate the contribution of football-domain finetuning and autonomous calibration respectively. The focus is set pieces (corners and direct free kicks), where broadcast cameras are near-static and all relevant players are typically in frame.
 
-**Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations. Of 33 candidate clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset, all 33 are processable end-to-end under autonomous TVCalib calibration (the GT-pitch-line baseline excluded 13 of 33 due to insufficient pitch-line coverage; this exclusion drove the original methodological motivation for replacing it). A further 2 clips were identified as annotation errors during visual inspection (one Corner showed a mid-game scene; one Direct free-kick showed a throw-in) and excluded from visualisations. Validation is distributional: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap.
+**Validation.** The pipeline was evaluated against SoccerNet Game State Recognition (GSR) ground-truth annotations. Of 33 candidate clips (17 corners, 16 direct free kicks) drawn from the 2024 dataset, all 33 are processable end-to-end under autonomous TVCalib calibration (the GT-pitch-line baseline excluded 13 of 33 due to insufficient pitch-line coverage; this exclusion drove the original methodological motivation for replacing it). A further 2 clips were identified as annotation errors during visual inspection (one Corner showed a mid-game scene; one Direct free-kick showed a throw-in) and excluded from visualisations. Validation is distributional and per-frame paired: pipeline and ground-truth Pitch Control distributions are compared using two-sample Kolmogorov–Smirnov tests and histogram overlap, complemented by per-frame paired Pearson and Spearman correlation on identical frames.
 
-**Results.** The final pipeline (Soccana + TVCalib) achieves near-zero bias on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013) versus full-cohort GT. Histogram overlap is ≥0.81 on 4/5 metrics. Bias falls on 4/5 metrics relative to the GT-leak YOLOv8x baseline. KS strict pass count (α=0.05) is 0/5 versus 1/5 baseline, but the regression is driven by statistical power (n grew from 286 to 457 paired frames), not by worse fit: bias and overlap improve. The ablation isolates ~30% of residual bias to detector domain mismatch (closed by Soccana finetuning) and ~70% to structural broadcast-angle occlusion. The bias is structural and explainable, not random.
+**Results.** The primary pipeline (Soccana + TVCalib, 30 clips paired with full-cohort GT) achieves near-zero distributional bias on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013), histogram overlap ≥0.81 on 4/5 metrics, and per-frame paired Pearson r=0.677 on `pc_at_ball` over 441 paired frames. Bias falls on 4/5 metrics relative to the GT-leak YOLOv8x baseline (20 clips, 270 paired frames). Strict KS pass count (α=0.05) is 0/5 vs 1/5 baseline, but the regression reflects statistical power (n grew from 270 to 441 paired frames), not worse fit: bias, overlap, and per-frame correlation all improve under the primary pipeline. The detector ablation isolates a meaningful share of residual global-metric bias to detector domain mismatch (closed by Soccana finetuning); the remainder is consistent with structural broadcast-angle occlusion of defenders in crowded penalty-area crops. The bias is structural and explainable, not random.
 
 **Impact.** Any team with broadcast access and a Python environment can run this pipeline. The approach is directly applicable to competitions where commercial tracking is absent but video is available.
 
@@ -91,7 +91,7 @@ For the majority of professional and semi-professional clubs, data-driven set-pi
 
 ### 2.2 The Problem
 
-Set pieces (corners and direct free kicks) account for roughly 30% of goals in major tournaments (StatsBomb, 2024). They are also the highest-information moments for a computer vision pipeline: the broadcast camera is nearly static, all relevant players are in frame, and the ball position is precisely known from the event feed. This combination makes set pieces the optimal entry point for extracting positional value from video without a dedicated tracking rig.
+Set pieces (corners and direct free kicks) are a tactically high-leverage and analytically tractable phase of play. Across the 706 set pieces in UEFA Euro 2024 (this project's reference dataset), 32.4% produced a shot within 10 seconds of execution and 1.8% produced a goal in the same window (Figure 4), and the cumulative tactical influence over a tournament is substantial. They are also the highest-information moments for a computer vision pipeline: the broadcast camera is nearly static, all relevant players are in frame, and the ball position is precisely known from the event feed. This combination makes set pieces the optimal entry point for extracting positional value from video without a dedicated tracking rig.
 
 ### 2.3 Why This Matters
 
@@ -320,7 +320,7 @@ All evaluation thresholds (KS α, histogram bin count, paired frame window) are 
 2. All tactically relevant players are in frame, with no occlusion from wide angles.
 3. The ball position is fixed and can be pulled from the event feed, so no ball tracking is required.
 
-Set pieces account for approximately 30% of goals in major tournaments (StatsBomb, 2024), making the tactical output directly decision-relevant. Figure 4 shows that the majority of Euro 2024 set pieces produce no shot within 10 s, confirming that defensive-organisation metrics like Pitch Control, rather than shot counts, capture the analytically relevant variable.
+Of 706 Euro 2024 set pieces, 464 (65.7%) produced no shot within 10 s, 229 (32.4%) produced a shot on or off target, and 13 (1.8%) produced a goal in that window (Figure 4). The low shot-conversion rate confirms that defensive-organisation metrics like Pitch Control, rather than shot counts, capture the analytically relevant variable for evaluating set-piece danger.
 
 ![Figure 4. Outcome distribution within 10 seconds of set-piece execution, Euro 2024.](outputs/figures/04_setpiece_outcomes_10s.png)
 
@@ -355,13 +355,15 @@ The core of nb02 is the parallel construction of two player coordinate tracks fo
 
 1. **Player detection and tracking (YOLOv8x + ByteTrack).** YOLOv8x was run at confidence threshold 0.40 on COCO class 0 (person) via `yolo.track(..., tracker="bytetrack.yaml", persist=True)`. ByteTrack (Zhang et al., 2022) assigns persistent integer track IDs across frames by associating every detection box (including low-confidence ones) using Kalman filter state and IoU matching. This eliminates the per-frame label instability of pure detection: each physical player receives the same track ID throughout the clip window. The tracker state was reset between clips to prevent ID carry-over. Foot positions were approximated as the bottom-centre of each bounding box for homography projection. Inference ran on Apple Silicon MPS backend.
 
-2. **Team assignment (KMeans on HSV, per-track).** The pipeline uses a two-pass design per clip. In Pass 1, jersey HSV features are accumulated per track ID across all frames: the torso region of each bounding box (central 50% horizontally, 15–45% vertically) is extracted and converted to HSV, and samples are collected per track ID. In Pass 2, a single KMeans (k=3) is run on per-track mean HSV, producing one stable team label per physical player rather than a potentially flip-flopping label per frame-detection. The smallest cluster is dropped if it represents less than 15% of tracks or its centroid matches a referee-kit heuristic (yellow/green HSV or very dark). The remaining two clusters are assigned team labels 0 and 1. This approach requires no labelled jersey data and is robust to varying kit colours across clips.
+2. **Team assignment (KMeans on HSV, per-track).** The pipeline uses a two-pass design per clip. In Pass 1, jersey HSV features are accumulated per track ID across all frames: the torso region of each bounding box (central 50% horizontally, 15–45% vertically) is extracted and converted to HSV, and samples are collected per track ID. In Pass 2, KMeans is run once on per-track mean HSV with k=3 to allow a separate cluster for referees and outliers. If the smallest cluster represents less than 15% of tracks or its centroid matches a referee-kit heuristic (yellow/green hue or very low value), that cluster is dropped and KMeans is re-fit with k=2 on the surviving samples to produce final team labels 0 and 1. This produces one stable team label per physical player rather than a potentially flip-flopping label per frame-detection, requires no labelled jersey data, and is robust to varying kit colours across clips.
 
 3. **Homography (OpenCV RANSAC).** SoccerNet GSR pitch-line annotations label each line as a named polyline in normalised image coordinates. A library of 28 known pitch-line intersections (outer corners, halfway line, penalty box corners, six-yard box corners, goal posts; see nb02 §2.1) was used to derive image↔pitch correspondences. `cv2.findHomography` with RANSAC (reprojection threshold 15 px) estimated the planar transform from pixel to metric coordinates. Clips where fewer than 4 correspondences were recovered were excluded.
 
 **Ground-truth track.** For each processed frame, SoccerNet GSR `bbox_pitch` annotations were parsed directly. Centred coordinates (±52.5, ±34) were re-centred to (0–105, 0–68). Player role was preserved (player / goalkeeper); referees were excluded by category_id filter.
 
-**Outputs.** `detections_pipeline.parquet` (4,146 rows, 20 clips, 12 columns including `track_id`) and `detections_gt.parquet` (4,295 rows, 20 clips). The 149-row difference (GT > pipeline) is the primary source of the bias identified in evaluation.
+**Outputs (GT-leak baseline cohort).** `detections_pipeline.parquet` (3,755 rows, 20 clips, 12 columns including `track_id`) and `detections_gt.parquet` (4,295 rows, 20 clips). The 540-row shortfall (GT > pipeline, ~13%) is the primary source of the global-metric bias identified in §7.5.2.
+
+**Outputs (primary pipeline cohort).** `detections_pipeline_tvcalib.parquet` (6,226 rows, 33 clips, YOLOv8x + TVCalib), `detections_soccana_tvcalib.parquet` (6,369 rows, 33 clips, Soccana + TVCalib), and `detections_gt_full.parquet` (7,186 rows, 33 clips). The Soccana shortfall vs full GT is 817 rows (~11%), narrower than the YOLOv8x shortfall under the same homography (960 rows, ~13%), confirming the detector-domain contribution to detection completeness.
 
 **Sampling strategy.** ±15 frames around `action_position` were processed per clip (up to 31 frames), providing temporal variation while remaining within the set-piece execution window.
 
@@ -401,43 +403,89 @@ Figure 7 shows a representative paired Pitch Control surface for a single set-pi
 
 Evaluation used two-sample Kolmogorov–Smirnov tests (α=0.05, `scipy.stats.ks_2samp`) and histogram overlap (Bhattacharyya-style sum of min(p, q), 12 bins locked). Per-frame paired comparisons used Pearson and Spearman correlation, MAE, and signed bias. Analysis was stratified by action class (Corner / Direct free-kick) and pooled.
 
-**KS test results (pooled):**
+Three pipeline configurations are reported:
 
-| Metric | KS stat | p-value | Hist. overlap | Mean pipeline | Mean GT | Reject H0? |
+1. **Primary pipeline:** Soccana detector + TVCalib autonomous homography. The full autonomous configuration with no dependency on SoccerNet GSR pitch-line annotations.
+2. **TVCalib YOLOv8x:** YOLOv8x detector + TVCalib homography. Isolates the contribution of football-domain detector finetuning.
+3. **GT-leak baseline:** YOLOv8x detector + GT-pitch-line RANSAC homography. The original baseline configuration; retained as an ablation arm because it exposes the homography-leak issue that motivated TVCalib adoption.
+
+The primary pipeline evaluates against full-cohort GT (`detections_gt_full.parquet`, 33 clips); the GT-leak baseline evaluates against `detections_gt.parquet` (the 20 clips where RANSAC homography succeeded). The cohort mismatch is one of the reasons the GT-leak baseline cannot be directly compared frame-for-frame with the primary pipeline; §8.5 addresses the resulting comparison challenges.
+
+#### 7.5.1 Primary pipeline (Soccana + TVCalib) vs full-cohort GT
+
+The primary configuration produces 457 frames across 30 paired clips, with 441 frame indices common to GT.
+
+**Distributional comparison (pooled, n_pipe=457, n_gt=442):**
+
+| Metric | KS stat | p-value | Hist. overlap | Mean primary | Mean GT | Δ |
 |---|---|---|---|---|---|---|
-| `pc_mean` | 0.319 | <0.001 | 0.648 | 0.483 | 0.617 | Yes |
-| `pc_at_ball` | 0.111 | 0.061 | 0.857 | 0.874 | 0.895 | **No** |
-| `pc_in_box` | 0.192 | <0.001 | 0.730 | 0.594 | 0.571 | Yes |
-| `pc_in_third` | 0.221 | <0.001 | 0.763 | 0.561 | 0.634 | Yes |
-| `pc_area_gt_0p5` | 0.316 | <0.001 | 0.606 | 0.484 | 0.630 | Yes |
+| `pc_mean` | 0.193 | <0.001 | 0.807 | 0.541 | 0.595 | −0.055 |
+| `pc_at_ball` | 0.110 | 0.008 | 0.854 | 0.899 | 0.898 | **+0.001** |
+| `pc_in_box` | 0.126 | 0.001 | 0.806 | 0.588 | 0.575 | **+0.013** |
+| `pc_in_third` | 0.118 | 0.003 | 0.810 | 0.581 | 0.621 | −0.040 |
+| `pc_area_gt_0p5` | 0.169 | <0.001 | 0.815 | 0.544 | 0.604 | −0.061 |
 
-Figure 8 overlays pipeline and GT histograms for each metric, making the per-metric distributional gap visually explicit. `pc_at_ball` (top centre) shows near-complete overlap, consistent with the KS pass; the global metrics show systematic leftward shift.
+Histogram overlap exceeds 0.80 on all five metrics. Bias is near zero on `pc_at_ball` and `pc_in_box` (the two most operationally meaningful set-piece metrics: control at the delivery point and control inside the penalty box). Strict KS at α=0.05 rejects H0 on all five metrics; §8.5 demonstrates this is a statistical-power artifact of larger n rather than a fit regression.
 
-![Figure 8. Histogram overlays of pipeline vs ground-truth Pitch Control summary metrics.](outputs/figures/08_histogram_overlays.png)
-
-**Per-frame paired results (n=261 paired frames):**
+**Per-frame paired comparison (n=441 paired frames, primary vs GT_full):**
 
 | Metric | Pearson r | Spearman r | MAE | Bias |
 |---|---|---|---|---|
-| `pc_mean` | −0.183 | −0.232 | 0.305 | −0.134 |
-| `pc_at_ball` | **+0.318** | **+0.371** | **0.122** | **−0.023** |
-| `pc_in_box` | −0.005 | −0.012 | 0.293 | +0.036 |
-| `pc_in_third` | −0.107 | −0.073 | 0.236 | −0.066 |
-| `pc_area_gt_0p5` | −0.170 | −0.214 | 0.321 | −0.145 |
+| `pc_mean` | +0.269 | +0.263 | 0.133 | −0.056 |
+| `pc_at_ball` | **+0.677** | **+0.572** | **0.072** | **−0.001** |
+| `pc_in_box` | +0.373 | +0.426 | 0.227 | +0.021 |
+| `pc_in_third` | +0.439 | +0.395 | 0.175 | −0.035 |
+| `pc_area_gt_0p5` | +0.239 | +0.224 | 0.151 | −0.062 |
 
-Figures 5 and 9 show the per-frame paired scatter; the `pc_at_ball` panel exhibits the strongest positive trend, consistent with its higher Pearson and Spearman correlations.
+Per-frame paired correlation is strongly positive on `pc_at_ball` (Pearson r=0.677, Spearman r=0.572) and meaningfully positive on the four other metrics. MAE is 0.072 on `pc_at_ball`, indicating that on average the primary pipeline's at-ball control estimate differs from GT by 7.2 percentage points per frame.
+
+Figures 5 and 9 show the per-frame paired scatter (originally generated against the 20-clip GT-leak baseline; the qualitative pattern is consistent under the primary configuration with stronger correlations).
 
 ![Figure 5. Paired pipeline vs ground-truth values per frame for each Pitch Control metric.](outputs/figures/05_pipeline_vs_gt_scatter.png)
 
 ![Figure 9. Paired scatter focused on per-action-class stratification.](outputs/figures/09_paired_scatter.png)
 
-Figure 6 shows the per-frame defender count distribution for pipeline and GT tracks, which directly motivates the bias diagnosis below.
+Figure 8 overlays pipeline and GT histograms; `pc_at_ball` (top centre) shows near-complete overlap, consistent with the high overlap score and near-zero bias.
 
-![Figure 6. Distribution of detected players per frame, pipeline vs ground truth (20 clips).](outputs/figures/06_players_per_frame_dist.png)
+![Figure 8. Histogram overlays of pipeline vs ground-truth Pitch Control summary metrics.](outputs/figures/08_histogram_overlays.png)
 
-**Bias diagnosis (nb04 §4b).** GT annotations provide more player detections per frame than the pipeline (4,295 GT rows vs. 4,146 pipeline rows across 20 identical clips). In the Shaw model, additional defenders compress attacking PC uniformly across the surface. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count, which is why it is the only metric to pass KS. Figure 10 confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
+#### 7.5.2 GT-leak baseline (YOLOv8x + GT-pitch-line H) vs 20-clip GT
+
+The GT-leak baseline is reported because it exposes the autonomy issue (GT pitch lines feeding the homography), motivates the TVCalib replacement, and provides a controlled comparison point. It processes 20 clips successfully (13 of 33 are excluded by RANSAC homography failure) and produces 286 frames against 270 GT frames.
+
+**Distributional comparison (pooled, n_pipe=286, n_gt=270):**
+
+| Metric | KS stat | p-value | Hist. overlap | Mean baseline | Mean GT | Δ | Reject H0? |
+|---|---|---|---|---|---|---|---|
+| `pc_mean` | 0.402 | <0.001 | 0.629 | 0.450 | 0.617 | −0.167 | Yes |
+| `pc_at_ball` | 0.089 | 0.202 | 0.864 | 0.876 | 0.895 | −0.019 | **No** |
+| `pc_in_box` | 0.174 | <0.001 | 0.693 | 0.581 | 0.571 | +0.011 | Yes |
+| `pc_in_third` | 0.203 | <0.001 | 0.762 | 0.557 | 0.634 | −0.077 | Yes |
+| `pc_area_gt_0p5` | 0.375 | <0.001 | 0.638 | 0.450 | 0.630 | −0.180 | Yes |
+
+The baseline passes KS on `pc_at_ball` (p=0.202) but fails on the other four metrics. Bias on the global metrics (`pc_mean`, `pc_area_gt_0p5`) is large and consistently negative (−0.17 to −0.18).
+
+**Per-frame paired comparison (n=270 paired frames, baseline vs GT):**
+
+| Metric | Pearson r | Spearman r | MAE | Bias |
+|---|---|---|---|---|
+| `pc_mean` | −0.032 | −0.175 | 0.243 | −0.174 |
+| `pc_at_ball` | +0.548 | +0.457 | 0.094 | −0.024 |
+| `pc_in_box` | +0.016 | +0.003 | 0.274 | +0.025 |
+| `pc_in_third` | −0.028 | +0.040 | 0.195 | −0.070 |
+| `pc_area_gt_0p5` | −0.048 | −0.193 | 0.270 | −0.187 |
+
+The baseline produces meaningful paired correlation only on `pc_at_ball` (r=0.548). The other metrics show essentially zero or weakly negative paired correlation under the baseline configuration, in contrast to the primary pipeline which is positive across the board.
+
+Figure 6 shows the per-frame defender count distribution for the baseline pipeline and GT tracks.
+
+![Figure 6. Distribution of detected players per frame, pipeline vs ground truth (20 clips, baseline).](outputs/figures/06_players_per_frame_dist.png)
+
+**Bias diagnosis (nb04 §4b).** GT annotations record more player positions per frame than the YOLOv8x baseline detector recovers: 4,295 GT rows vs 3,755 pipeline rows across 20 identical clips (a 540-row, ~13% shortfall). In the Shaw model, additional defenders compress attacking PC uniformly across the surface, which explains the consistent negative bias on global metrics. `pc_at_ball` is structurally insensitive to this effect because the ball-proximate cell is dominated by the nearest attacker regardless of total defender count, which is why it is the only metric to pass strict KS under the baseline. Figure 10 confirms a consistent negative relationship between defender count and `pc_mean` in both tracks.
 
 ![Figure 10. Per-frame defender count vs `pc_mean`, pipeline (red) and ground truth (blue).](outputs/figures/10_defenders_vs_pc_mean.png)
+
+The primary pipeline's bias reduction comes from two complementary corrections: Soccana's football-finetuned weights detect more players per frame, and TVCalib eliminates the 13-clip cohort attrition that biases the baseline toward easier camera geometries. §8.5 provides the three-way ablation that decomposes the contribution of each.
 
 ### 7.6 Deployment
 
@@ -455,17 +503,19 @@ Figure 6 shows the per-frame defender count distribution for pipeline and GT tra
 
 ### 8.1 What the pipeline gets right
 
-`pc_at_ball` (control probability at the ball location) is preserved with meaningful fidelity at the pooled level. Histogram overlap of 0.857, KS p=0.061 (non-significant at α=0.05 pooled), and Pearson r=0.318 across 261 paired frames indicate the pipeline tracks immediate ball-zone control reasonably well. Stratified by action class, `pc_at_ball` does reject H0 (corners p=0.016, direct free kicks p=0.011); the pooled pass reflects averaging across subgroups with partially opposing biases rather than uniform distributional equivalence. For set-piece analysis this remains the most operationally useful signal: it captures whether the executing team has spatial dominance at the point of delivery, which is the primary determinant of set-piece danger.
+The primary pipeline (Soccana + TVCalib) preserves the most operationally meaningful set-piece signal, `pc_at_ball` (control probability at the ball location), with near-zero bias (Δ=−0.001), histogram overlap of 0.854, and Pearson r=0.677 across 441 paired frames. It captures whether the executing team has spatial dominance at the point of delivery, which is the primary determinant of set-piece danger. `pc_in_box` is similarly well-preserved (Δ=+0.013, overlap 0.806, Pearson r=0.373), capturing penalty-area dominance. Strict KS at α=0.05 does reject H0 on `pc_at_ball` under the primary configuration (p=0.008), but this reflects the larger paired-frame count (441 vs 270 in the baseline) rather than a degraded fit, as discussed in §8.5.
+
+The GT-leak baseline (YOLOv8x + GT-pitch-line H) also preserves `pc_at_ball` reasonably well at the pooled level (KS p=0.202, overlap 0.864, Pearson r=0.548 across 270 paired frames). Stratified by action class, the baseline does reject H0 on `pc_at_ball` (corners p=0.045, direct free kicks p<0.001); the pooled non-rejection reflects averaging across subgroups with partially opposing biases rather than uniform distributional equivalence. Both configurations agree on this finding: the at-ball signal is the most robust output of the pipeline.
 
 ### 8.2 What the pipeline underestimates and why
 
-Global metrics (`pc_mean`, `pc_area_gt_0p5`) are systematically underestimated by 0.13–0.15. The bias is structural: YOLOv8 detects fewer defenders per frame than GT annotations, and the Shaw model is sensitive to total defender count in a predictable direction, where more defenders compress attacking control across the whole surface.
+Global metrics (`pc_mean`, `pc_area_gt_0p5`) are systematically underestimated. Under the GT-leak baseline the bias is large (Δ=−0.17 to −0.18); under the primary Soccana + TVCalib pipeline it falls substantially (Δ=−0.055 to −0.061) but does not vanish. The bias is structural: YOLOv8x and (to a lesser extent) Soccana detect fewer defenders per frame than GT annotations, and the Shaw model is sensitive to total defender count in a predictable direction, where more defenders compress attacking control across the whole surface.
 
-This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops, typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. Figure 11 quantifies this gap across detectors; YOLOv8x and Soccana both underdetect relative to GT, with Soccana closer to GT counts. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
+This is not a modelling error; it is a detection completeness issue. YOLOv8x at conf=0.40 misses some players in crowded penalty-area crops, typically defenders in tight clusters who are partially occluded or at the edge of the detection confidence window. GT annotations include every visible player. Soccana, finetuned on SoccerNet GSR and match footage, recovers a higher share of these defenders but still falls short of GT in dense penalty-box configurations. Figure 11 quantifies this gap across detectors; YOLOv8x and Soccana both underdetect relative to GT, with Soccana consistently closer to GT counts. The result is a consistent downward bias in attacking PC wherever defenders are underrepresented.
 
 ![Figure 11. Per-frame detection counts: YOLOv8x vs Soccana vs GT.](outputs/figures/11_ablation_detector_counts.png)
 
-The `pc_in_box` metric shows a slight positive bias (pipeline 0.594 vs GT 0.571, bias +0.036) which is directionally reversed. This is consistent with fewer defenders being detected *inside* the box: the pipeline overestimates attacking control in the most contested zone because it is missing defenders there.
+The `pc_in_box` metric under the baseline shows a slight positive bias (pipeline 0.581 vs GT 0.571, Δ=+0.011); under the primary pipeline this stays small (Δ=+0.013). The YOLOv8x + TVCalib configuration shows a much larger positive bias on this metric (Δ=+0.100), indicating that TVCalib alone (without detector improvement) shifts coordinates into the penalty area more aggressively than YOLOv8x can detect defenders to balance it. The primary pipeline corrects this asymmetry by pairing TVCalib with a higher-recall detector.
 
 ### 8.3 Practical implications
 
@@ -485,7 +535,7 @@ A second methodological concern: the baseline pipeline computes homography from 
 
 ### 8.5 H-source ablation: GT-pitch-line leak vs TVCalib autonomous
 
-To close the autonomy gap, the GT-pitch-line homography was replaced with TVCalib (Theiner & Ewerth, WACV 2023, MM4SPA/tvcalib), a peer-reviewed self-supervised camera calibration method that segments pitch lines from the broadcast frame and optimises camera parameters per frame. All other pipeline stages (ByteTrack, KMeans-HSV teams, Laurie Shaw PC) were held constant.
+§7.5 reported the primary pipeline (Soccana + TVCalib) and the GT-leak baseline side by side. This subsection focuses on the controlled three-way ablation that decomposes the contribution of detector and homography source. To close the autonomy gap, the GT-pitch-line homography was replaced with TVCalib (Theiner & Ewerth, WACV 2023, MM4SPA/tvcalib), a peer-reviewed self-supervised camera calibration method that segments pitch lines from the broadcast frame and optimises camera parameters per frame. All other pipeline stages (ByteTrack, KMeans-HSV teams, Laurie Shaw PC) were held constant.
 
 **Phase 1 sanity check.** TVCalib H was compared against the GT-pitch-line H on five SNGS-066 frames by projecting GT player `bbox_pitch` foot points to image space and measuring pixel RMSE against the GT `bbox_image` annotations. TVCalib produced mean RMSE 17 px; the GT-line H produced 148,151 px because each frame had only the four-intersection minimum and RANSAC was unstable. The decisive Phase 1 result motivated full-pipeline integration.
 
@@ -519,12 +569,13 @@ Bias falls on 4/5 metrics under TVCalib; histogram overlap rises on 4/5. The Soc
 
 ### 9.1 Key Findings
 
-1. **`pc_at_ball` passes distributional validation at the pooled level** on the 20-clip GT-leak baseline (KS p=0.061, overlap 0.857, MAE 0.122), though stratified tests by action class reject H0 (corners p=0.016, direct free kicks p=0.011). Under the autonomous TVCalib + Soccana configuration on the full 33-clip cohort, bias collapses to Δ=+0.001 with overlap 0.854 (see §8.5). The pipeline preserves the most decision-relevant set-piece signal with the caveat that subgroup distributions diverge.
-2. **Global surface metrics are systematically biased** by YOLOv8 under-detection of defenders, producing underestimates of 0.13–0.15. The mechanism is identified, quantified, and consistent with the model's mathematical structure.
-3. **ByteTrack integration** eliminates per-frame team-label instability by assigning persistent player IDs, enabling KMeans team assignment to run once per clip on aggregated jersey colour evidence rather than per-frame.
-4. **SoccerNet GSR annotation quality is imperfect:** 2 of 20 processable clips carried incorrect `action_class` labels (a mid-game scene annotated as Corner; a throw-in annotated as Direct free-kick), identified through visual inspection during visualisation.
-5. **Homography source ablation (TVCalib autonomous calibration)** removes the GT-pitch-line dependency entirely. All 33/33 clips process end-to-end (vs 20/33 baseline), bias falls on 4/5 metrics, and the Soccana+TVCalib combination achieves near-zero bias on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013). KS strict pass count drops 1→0 because cohort n grew from 286 to 457 frames, but histogram overlap improves on 4/5 metrics.
-6. **The pipeline is fully reproducible** on a consumer laptop (MacBook Air M3), requiring no cloud infrastructure, proprietary data, or commercial licences.
+1. **The primary pipeline (Soccana + TVCalib) preserves the most decision-relevant set-piece signal** with near-zero bias. On `pc_at_ball` it produces distributional Δ=+0.001 against full-cohort GT (33 clips, n_pipe=457 vs n_gt=442), histogram overlap 0.854, per-frame paired Pearson r=0.677, and per-frame MAE 0.072 over 441 paired frames. On `pc_in_box` it produces Δ=+0.013, overlap 0.806, Pearson r=0.373. Strict KS rejects H0 on all five metrics, but this reflects increased statistical power (n=441 paired frames) detecting smaller distributional differences; bias and overlap improve relative to the baseline on 4/5 metrics, and per-frame paired correlation improves on all five.
+2. **The GT-leak baseline also preserves `pc_at_ball` at the pooled level** (KS p=0.202, overlap 0.864, Pearson r=0.548, n=270 paired frames), the only metric for which it passes strict KS. Stratified tests by action class do reject H0 (corners p=0.045, direct free kicks p<0.001), so the baseline pooled pass reflects subgroup-averaging rather than uniform distributional equivalence. The primary pipeline does not have this stratification artifact.
+3. **Global surface metrics are systematically biased** by detector under-detection of defenders, producing underestimates of 0.06 (primary) to 0.18 (baseline) on `pc_mean` and `pc_area_gt_0p5`. The mechanism is identified, quantified, and consistent with the Shaw model's mathematical structure; Soccana's football-finetuned weights close approximately a third of the YOLOv8x global-metric bias under identical homography.
+4. **ByteTrack integration** eliminates per-frame team-label instability by assigning persistent player IDs, enabling KMeans team assignment to run once per clip on aggregated jersey colour evidence rather than per-frame.
+5. **SoccerNet GSR annotation quality is imperfect:** 2 of 20 processable clips in the GT-leak cohort carried incorrect `action_class` labels (a mid-game scene annotated as Corner; a throw-in annotated as Direct free-kick), identified through visual inspection during visualisation.
+6. **TVCalib autonomous calibration** removes the GT-pitch-line dependency entirely. All 33/33 clips process end-to-end (vs 20/33 baseline), with 30 paired against full-cohort GT (vs 18 in the baseline cohort). Phase 1 sanity gave TVCalib mean RMSE 17 px against the GT-line H's 148,151 px (degenerate RANSAC on 4-intersection frames).
+7. **The pipeline is fully reproducible** on a consumer laptop (MacBook Air M3), requiring no cloud infrastructure, proprietary data, or commercial licences.
 
 ### 9.2 Reflection on Objectives
 
@@ -605,8 +656,6 @@ soccernet-setpiece-vision/
             anim_direct_free-kick_<clip_id>.gif
             still_corner_<clip_id>.png
             still_direct_free-kick_<clip_id>.png
-            video_corner_<clip_id>.mp4
-            video_direct_free-kick_<clip_id>.mp4
     scripts/
         download_soccernet.py
         dump_ball_positions.py / dump_gt_setpieces.py
@@ -635,7 +684,7 @@ All parameters below are locked for reproducibility. Any deviation invalidates t
 | Camera calibration | TVCalib (Theiner & Ewerth, WACV 2023) | run_tvcalib_batch.py |
 | TVCalib median loss_ndc_total | 0.011 | run_tvcalib_batch.py |
 | Tracker | ByteTrack (`bytetrack.yaml` via ultralytics) | nb02 |
-| KMeans k | 3 (drop smallest if <15% or ref-like) | nb02 |
+| KMeans k | 3 with smallest-cluster drop (<15% of tracks or referee-kit centroid), then re-fit k=2 on survivors | nb02 |
 | KMeans features | Per-track mean HSV (aggregated across ±15 frames) | nb02 |
 | PC grid | 60 × 40 cells (105 × 68 m) | nb03 |
 | MAX_SPEED | 5.0 m/s | nb03 |
@@ -685,18 +734,13 @@ Animated GIFs of the Pitch Control surface evolving over the ±15 frame window (
 - `outputs/figures/anim_direct_free-kick_SNGS-131.gif`
 - `outputs/figures/anim_direct_free-kick_SNGS-198.gif`
 
-These animations do not embed in static PDF/DOCX exports and are referenced as supplementary material.
+These animations do not embed in static PDF/DOCX exports and are referenced as supplementary material in the GitHub repository.
 
-**MP4 video outputs** are produced by nb05 §7 using `cv2.VideoWriter` (codec: mp4v, 6 fps, 1920×600 px). Each MP4 renders the same three-panel layout as the GIFs (broadcast frame | minimap | Pitch Control heatmap) but as a proper video file suitable for the explanatory video deliverable and portfolio demonstration:
-
-- `outputs/figures/video_corner_<clip_id>.mp4`
-- `outputs/figures/video_direct_free-kick_<clip_id>.mp4`
-
-These files require the SSD to be mounted (broadcast JPEGs are read from `img1/` directories); the cached Parquet files are sufficient for all other pipeline steps.
+**MP4 video exports** can be produced from the same nb05 frame sequence using `cv2.VideoWriter` (codec mp4v, 6 fps, 1920×600 px three-panel layout: broadcast frame | minimap | Pitch Control heatmap). The MP4 export step requires the SSD to be mounted (broadcast JPEGs are read from each clip's `img1/` directory); the cached Parquet files are sufficient for all other pipeline steps.
 
 ### Appendix F: Data Dictionary
 
-**`detections_pipeline.parquet`** — player detections from the CV pipeline (YOLOv8x or Soccana + ByteTrack + TVCalib).
+**`detections_pipeline.parquet`**: player detections from the CV pipeline (YOLOv8x or Soccana + ByteTrack + TVCalib).
 
 | Column | Type | Description |
 |---|---|---|
@@ -712,7 +756,7 @@ These files require the SSD to be mounted (broadcast JPEGs are read from `img1/`
 | `bbox_x1`, `bbox_y1`, `bbox_x2`, `bbox_y2` | float | Bounding box in image pixels |
 | `split` | str | SoccerNet split: `train`, `valid`, `test`, or `challenge` |
 
-**`detections_gt.parquet`** — player positions from SoccerNet GSR ground-truth annotations.
+**`detections_gt.parquet`**: player positions from SoccerNet GSR ground-truth annotations.
 
 | Column | Type | Description |
 |---|---|---|
@@ -726,7 +770,7 @@ These files require the SSD to be mounted (broadcast JPEGs are read from `img1/`
 | `action_class` | str | Set-piece type: `Corner` or `Direct free-kick` |
 | `action_position` | int | Frame index of set-piece moment |
 
-**`pitch_control.parquet`** — Pitch Control summary metrics per frame, for all tracks.
+**`pitch_control.parquet`**: Pitch Control summary metrics per frame, for all tracks.
 
 | Column | Type | Description |
 |---|---|---|
@@ -742,7 +786,7 @@ These files require the SSD to be mounted (broadcast JPEGs are read from `img1/`
 | `n_attackers` | int | Number of attacking-team players detected in frame |
 | `n_defenders` | int | Number of defending-team players detected in frame |
 
-**`validation_summary.parquet`** — KS test and histogram overlap results per metric and stratum.
+**`validation_summary.parquet`**: KS test and histogram overlap results per metric and stratum.
 
 | Column | Type | Description |
 |---|---|---|
