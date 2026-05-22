@@ -9,7 +9,7 @@ GT reference:
 
 Writes:
     outputs/validation_summary_tvcalib.parquet
-    outputs/figures/13_ks_table_tvcalib.png
+    outputs/figures/14_ks_table_tvcalib.png
 """
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ def main():
         f"H-source ablation: GT-pitch-line leak vs TVCalib autonomous (KS alpha={KS_ALPHA})",
         fontsize=11, pad=12,
     )
-    out_fig = FIGURES_DIR / "13_ks_table_tvcalib.png"
+    out_fig = FIGURES_DIR / "14_ks_table_tvcalib.png"
     fig.savefig(out_fig, dpi=150, bbox_inches="tight")
     print(f"\nSaved: {out_fig}")
 

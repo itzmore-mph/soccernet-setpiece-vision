@@ -6,7 +6,7 @@ Reads:
 
 Writes:
     outputs/ablation_ks_summary.parquet     (row per detector x metric)
-    outputs/figures/12_ablation_ks_table.png  (rendered table figure)
+    outputs/figures/13_ablation_ks_table.png  (rendered table figure)
 
 Uses the same locked nb04 parameters: KS alpha 0.05, 12 histogram bins, 5 metrics.
 """
@@ -92,7 +92,7 @@ def main():
     table.scale(1.0, 1.4)
     ax.set_title("Detector ablation: YOLOv8x vs Soccana (vs GT, KS at alpha=0.05)",
                  fontsize=11, pad=12)
-    out_fig = FIGURES_DIR / "12_ablation_ks_table.png"
+    out_fig = FIGURES_DIR / "13_ablation_ks_table.png"
     fig.savefig(out_fig, dpi=150, bbox_inches="tight")
     print(f"\nSaved: {out_fig}")
 

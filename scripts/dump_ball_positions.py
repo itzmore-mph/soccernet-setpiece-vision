@@ -37,7 +37,8 @@ def main() -> None:
         if cache_key not in labels_cache:
             label_path = GSR / k["split"] / k["clip_id"] / "Labels-GameState.json"
             try:
-                labels_cache[cache_key] = json.load(open(label_path))
+                with open(label_path) as f:
+                    labels_cache[cache_key] = json.load(f)
             except Exception:
                 labels_cache[cache_key] = None
         labels = labels_cache[cache_key]

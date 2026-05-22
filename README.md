@@ -39,6 +39,8 @@ soccernet-setpiece-vision/
 │   ├── dump_ball_positions.py
 │   ├── dump_gt_setpieces.py
 │   ├── repair_setpieces_freeze_frames.py
+│   ├── render_annotated_clips.py    # Render team-coloured bbox overlays to MP4
+│   ├── _pipeline_core.py            # Shared helpers (TVCalib scripts only, not for notebooks)
 │   │
 │   ├── # Detector ablation (YOLOv8x vs Soccana under GT-line H)
 │   ├── run_soccana_ablation.py
@@ -65,7 +67,7 @@ soccernet-setpiece-vision/
 └── requirements.txt          # pip freeze of py311-dev (lock snapshot, not curated)
 ```
 
-Video data lives on an external SSD (`SOCCERNET_LOCAL_DIR`), never in the repo. TVCalib lives in a sibling directory `../tvcalib/` with its own venv.
+Video data (~35 GB) lives on an external SSD (`SOCCERNET_LOCAL_DIR`), never in the repo. TVCalib lives in a sibling directory `../tvcalib/` with its own venv — see [TVCalib Setup](#tvcalib-setup-phases-13-only) below.
 
 ---
 
@@ -82,6 +84,76 @@ python scripts/download_soccernet.py
 ```
 
 Notebooks run in order (01 → 05). Outputs cached as Parquet so nb03–nb05 re-execute offline. Soccana weights auto-fetched from HuggingFace (`Adit-jain/soccana`) on first ablation run; YOLOv8x weights auto-downloaded by ultralytics.
+
+---
+
+## Reproducibility Without the Raw Data
+
+All intermediate outputs are committed to the repo. Graders who do not have access to the SoccerNet GSR video clips can reproduce every result downstream of detection by checking out this repo and running:
+
+```bash
+conda activate py311-dev
+jupyter nbconvert --to notebook --execute notebooks/03_pitch_control.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/04_evaluation_and_validation.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --inplace
+```
+
+These notebooks read from committed Parquet files in `outputs/` and write all figures to `outputs/figures/`. No SSD or internet access required beyond the initial `conda activate`.
+
+Notebook 01 fetches StatsBomb Open Data via `statsbombpy` (auto-cached to `~/.cache/statsbombpy/`). Notebook 02 requires the SSD and produces the detection Parquets; its committed outputs are already in `outputs/` so nb02 re-execution is optional for result verification.
+
+**Scripts that require the SSD** (phases 1–3 of both ablations): `download_soccernet.py`, `run_soccana_ablation.py`, `run_pipeline_tvcalib.py`, `run_soccana_tvcalib.py`, `tvcalib_rmse_check.py`, `run_tvcalib_batch.py`, `render_annotated_clips.py`.
+
+**Scripts that are SSD-free** (phases 4–5): `run_pc_*.py`, `run_pc_gt_full.py`, `ablation_ks_table.py`, `ks_table_tvcalib.py`, `dump_ball_positions.py` (reads committed Parquet).
+
+---
+
+## TVCalib Setup (Phases 1–3 Only)
+
+TVCalib is only needed to re-run camera calibration from raw frames. If you are reproducing results from the committed Parquet outputs, skip this section.
+
+TVCalib lives in a **sibling directory** outside this repo with its own Python venv. It is not a submodule of this project.
+
+```bash
+# 1. Clone TVCalib alongside this repo
+cd ..
+git clone https://github.com/MM4SPA/tvcalib.git
+cd tvcalib
+git submodule update --init --recursive
+# submodule: sn_segmentation at commit ffdb308
+
+# 2. Create the TVCalib venv (Python 3.11, separate from py311-dev)
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install torch==2.1.* torchvision kornia==0.8.2 pytorch-lightning==2.6.1
+pip install SoccerNet==0.1.62 opencv-python numpy
+
+# 3. Download the segmentation checkpoint (~466 MB)
+mkdir -p data/segment_localization
+# checkpoint: tvcalib/data/segment_localization/train_59.pt
+# Download from the MM4SPA/tvcalib release or HuggingFace model card
+# (see upstream README for the current download link)
+
+# 4. Apply two patches for PyTorch 2.x compatibility
+```
+
+**Patch 1** — `tvcalib/sncalib_dataset.py`, line 13: replace the broken import:
+```python
+# before
+from torch._six import string_classes
+# after
+string_classes = (str, bytes)
+```
+
+**Patch 2** — `tvcalib/inference.py`, line 89: add `weights_only=False`:
+```python
+# before
+checkpoint = torch.load(checkpoint_path, map_location=device)
+# after
+checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+```
+
+After setup, the scripts in this repo invoke TVCalib by calling `tvcalib/run_inference.py` via subprocess. No import of TVCalib into `py311-dev` is needed.
 
 ---
 

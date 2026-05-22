@@ -87,7 +87,7 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `scripts/run_soccana_ablation.py` — re-runs nb02 detection stage with Soccana (HF: `Adit-jain/soccana`) holding all other stages constant; writes `outputs/detections_soccana.parquet`. Needs SSD.
 - `scripts/run_pc_soccana.py` — mirrors nb03 PC model on Soccana detections; writes `outputs/pitch_control_soccana.parquet`. SSD-free.
 - `scripts/compare_detectors.py` — detection-count ablation (YOLOv8x vs Soccana vs GT); writes `outputs/ablation_detector_summary.parquet` + figure 11.
-- `scripts/ablation_ks_table.py` — standalone KS table for the PC ablation; writes `outputs/ablation_ks_summary.parquet` + figure 12.
+- `scripts/ablation_ks_table.py` — standalone KS table for the PC ablation; writes `outputs/ablation_ks_summary.parquet` + figure 13.
 - `scripts/repair_setpieces_freeze_frames.py` — re-fetches StatsBomb 360 freeze frames per match if nb01 produced 0% coverage. Use only if `outputs/setpieces.parquet` shows empty `freeze_frame` arrays.
 - `scripts/tvcalib_rmse_check.py` — Phase 1 sanity: project GT player `bbox_pitch` foot points through TVCalib H vs GT-pitch-line H, measure pixel RMSE on 5 SNGS-066 frames. Writes `outputs/tvcalib_phase1_rmse.parquet`. Needs SSD + `tvcalib/.venv/` set up.
 - `scripts/run_tvcalib_batch.py` — Phase 2 batch: stage all set-piece frames (33 clips × 16 = 528) into `/tmp/tvcalib_batch/`, invoke `tvcalib/run_inference.py` once, parse `calib.json` -> `outputs/homographies_tvcalib.parquet`. Idempotent; reuses `/tmp/tvcalib_batch_out/calib.json` if present.
@@ -95,9 +95,10 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `scripts/run_pc_tvcalib.py` — PC model on TVCalib detections; writes `outputs/pitch_control_tvcalib.parquet` (track='tvcalib'). SSD-free.
 - `scripts/dump_gt_setpieces.py` — extracts GT player positions for ALL 33 clips' set-piece windows (not the 20-clip subset that survived GT-line homography in nb02). Writes `outputs/detections_gt_full.parquet`. Needs SSD.
 - `scripts/run_pc_gt_full.py` — PC over `detections_gt_full.parquet`; writes `outputs/pitch_control_gt_full.parquet`. SSD-free.
-- `scripts/ks_table_tvcalib.py` — KS comparison: GT-leak YOLOv8x vs TVCalib YOLOv8x vs TVCalib Soccana, all against full-cohort GT. Writes `outputs/validation_summary_tvcalib.parquet` and `outputs/figures/13_ks_table_tvcalib.png`.
+- `scripts/ks_table_tvcalib.py` — KS comparison: GT-leak YOLOv8x vs TVCalib YOLOv8x vs TVCalib Soccana, all against full-cohort GT. Writes `outputs/validation_summary_tvcalib.parquet` and `outputs/figures/14_ks_table_tvcalib.png`.
 - `scripts/run_soccana_tvcalib.py` — Soccana detector under TVCalib H (pure ablation isolation). Writes `outputs/detections_soccana_tvcalib.parquet`. Needs SSD.
 - `scripts/run_pc_soccana_tvcalib.py` — PC for Soccana+TVCalib detections; writes `outputs/pitch_control_soccana_tvcalib.parquet`. SSD-free.
+- `scripts/render_annotated_clips.py` — renders team-colored player bbox overlays on broadcast frames; writes MP4s to `outputs/figures/annotated/`. Reads `x1_px/y1_px/x2_px/y2_px` columns from a detection parquet (produced by `run_pipeline_tvcalib.py` or `run_soccana_tvcalib.py`). Accepts `--clip SNGS-066` and `--detector soccana` flags. Needs SSD.
 
 **Outputs (all Parquet):**
 - `outputs/ball_positions.parquet`
@@ -122,7 +123,7 @@ All five notebooks exist and have been executed. Outputs directory is populated.
 - `outputs/validation_summary_tvcalib.parquet`     # KS table: 3-way H-source ablation
 - `outputs/tvcalib_phase1_rmse.parquet`            # Phase 1 sanity result (5 frames, SNGS-066)
 
-**Figures** (`outputs/figures/`): 13 static PNGs + 2 animated GIFs (corner, direct free-kick). Figures 11-12 cover the detector ablation (count distributions, KS table, histogram overlays). Figure 13 covers the TVCalib H-source ablation (3-way KS table: GT-leak baseline vs TVCalib YOLOv8x vs TVCalib Soccana).
+**Figures** (`outputs/figures/`): 14 static PNGs + 2 animated GIFs (corner, direct free-kick). Figures 11-13 cover the detector ablation (count distributions, histogram overlays, KS table). Figure 14 covers the TVCalib H-source ablation (3-way KS table: GT-leak baseline vs TVCalib YOLOv8x vs TVCalib Soccana).
 
 **Clip cohort:**
 - GT-leak baseline: 33 clips → 20 end-to-end (18 paired with GT in PC validation), 13 excluded by homography failure.
@@ -198,6 +199,11 @@ python scripts/run_soccana_tvcalib.py
 python scripts/run_pc_soccana_tvcalib.py
 python scripts/ks_table_tvcalib.py        # auto-includes Soccana+TVCalib row
 
+# Render annotated broadcast clips (MP4, needs SSD)
+python scripts/render_annotated_clips.py                     # all clips, yolov8x detections
+python scripts/render_annotated_clips.py --clip SNGS-066     # single clip
+python scripts/render_annotated_clips.py --detector soccana  # soccana detections
+
 # Register py311-dev as Jupyter kernel (one-time, after fresh env)
 python -m ipykernel install --user --name py311-dev --display-name "Python (py311-dev)"
 ```
@@ -205,6 +211,7 @@ python -m ipykernel install --user --name py311-dev --display-name "Python (py31
 ## External Caches
 - StatsBomb: `~/.cache/statsbombpy/` (statsbombpy auto-cache, offline-friendly)
 - YOLOv8 weights: `~/.cache/ultralytics/` (auto-download on first use; pin checkpoint name in notebook 02)
+- `notebooks/yolov8x.pt` and `yolov8x.pt` (project root) — local weight copies checked in for offline use; ultralytics also resolves from `~/.cache/ultralytics/` automatically
 - HuggingFace (if used): `~/.cache/huggingface/`
 
 ## Editable Packages

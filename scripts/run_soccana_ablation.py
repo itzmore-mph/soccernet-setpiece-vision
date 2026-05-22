@@ -44,7 +44,7 @@ SOCCANA_REPO = "Adit-jain/soccana"
 SOCCANA_WEIGHTS_PATH_IN_REPO = "Model/weights/best.pt"
 PLAYER_CLASS = 0                     # soccana class 0 = Player (excludes ball, referee)
 YOLO_CONF = 0.40
-DEVICE = "mps"
+DEVICE = os.getenv("TORCH_DEVICE", "mps")
 
 FRAME_WINDOW = 15
 
@@ -229,7 +229,8 @@ def discover_clips():
             if not lp.is_file():
                 continue
             try:
-                info = json.load(open(lp))["info"]
+                with open(lp) as f:
+                    info = json.load(f)["info"]
             except Exception:
                 continue
             if info.get("action_class") in TARGET_ACTIONS:
@@ -271,7 +272,8 @@ def main():
     for i, clip in clips.iterrows():
         clip_path = Path(clip["clip_path"])
         try:
-            labels = json.load(open(clip_path / "Labels-GameState.json"))
+            with open(clip_path / "Labels-GameState.json") as f:
+                labels = json.load(f)
         except Exception as e:
             skipped.append((clip["clip_id"], -1, f"labels: {e}"))
             continue

@@ -37,7 +37,8 @@ def main():
             if not label_path.is_file():
                 continue
             try:
-                labels = json.load(open(label_path))
+                with open(label_path) as f:
+                    labels = json.load(f)
             except Exception:
                 continue
             info = labels.get("info", {})
