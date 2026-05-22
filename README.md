@@ -89,7 +89,7 @@ Notebooks run in order (01 → 05). Outputs cached as Parquet so nb03–nb05 re-
 
 ## Reproducibility Without the Raw Data
 
-All intermediate outputs are committed to the repo. Graders who do not have access to the SoccerNet GSR video clips can reproduce every result downstream of detection by checking out this repo and running:
+All intermediate outputs are committed to the repo. Anyone without access to the SoccerNet GSR video clips can reproduce every result downstream of detection by checking out this repo and running:
 
 ```bash
 conda activate py311-dev
