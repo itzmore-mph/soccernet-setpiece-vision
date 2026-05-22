@@ -3,6 +3,7 @@
 **Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis**
 
 Master's Final Project, MSc AI Applied to Sports, Sports Data Campus
+
 Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 ---
@@ -73,9 +74,16 @@ Video data (~35 GB) lives on an external SSD (`SOCCERNET_LOCAL_DIR`), never in t
 
 ## Setup
 
+Requires **Python 3.11**. Install dependencies:
+
 ```bash
-conda activate py311-dev
-jupyter lab
+pip install -r requirements.txt
+```
+
+Open notebooks in any Jupyter-compatible environment (JupyterLab, VS Code, PyCharm) and select a Python 3.11 kernel, or run non-interactively:
+
+```bash
+jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
 ```
 
 ```bash
@@ -100,7 +108,7 @@ jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --in
 
 These notebooks read from committed Parquet files in `outputs/` and write all figures to `outputs/figures/`. No SSD or internet access required beyond the initial `conda activate`.
 
-Notebook 01 fetches StatsBomb Open Data via `statsbombpy` (auto-cached to `~/.cache/statsbombpy/`). Notebook 02 requires the SSD and produces the detection Parquets; its committed outputs are already in `outputs/` so nb02 re-execution is optional for result verification.
+Notebook 01 fetches StatsBomb Open Data via `statsbombpy` (auto-cached to `~/.cache/statsbombpy/`) and produces `outputs/setpieces.parquet` and `outputs/gt_spatial_benchmarks.parquet` (GT player spatial statistics used as validation benchmarks in nb04). Notebook 02 requires the SSD and produces the detection Parquets; its committed outputs are already in `outputs/` so nb02 re-execution is optional for result verification.
 
 **Scripts that require the SSD** (phases 1–3 of both ablations): `download_soccernet.py`, `run_soccana_ablation.py`, `run_pipeline_tvcalib.py`, `run_soccana_tvcalib.py`, `tvcalib_rmse_check.py`, `run_tvcalib_batch.py`, `render_annotated_clips.py`.
 
