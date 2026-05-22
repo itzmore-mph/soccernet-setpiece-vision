@@ -38,8 +38,9 @@ example/
 *.onnx
 
 # Outputs: keep parquet + figures (small, reproducible-from-notebooks)
-# Add specific ignores here if any output gets large.
-.claude/settings.local.json
+# Annotated broadcast clips are large MP4s, excluded from repo.
+outputs/figures/annotated/
 report.pdf
-.claude/settings.local.json
+
+# Local Claude config
 .claude/settings.local.json
