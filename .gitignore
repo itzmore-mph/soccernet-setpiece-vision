@@ -21,7 +21,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
-.claude/
 
 # Conda / venv (env lives in py311-dev outside repo)
 .venv/
@@ -41,6 +40,3 @@ example/
 # Annotated broadcast clips are large MP4s, excluded from repo.
 outputs/figures/annotated/
 report.pdf
-
-# Local Claude config
-.claude/settings.local.json

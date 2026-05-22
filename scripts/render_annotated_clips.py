@@ -1,25 +1,20 @@
 """Render annotated broadcast clips with team-colored player bboxes.
 
-Reads detection parquet (must contain x1_px/y1_px/x2_px/y2_px columns, produced
-by run_pipeline_tvcalib.py or run_soccana_tvcalib.py with the updated schema),
-loads broadcast frames from the SSD, and writes one MP4 per clip to
+Reads detections_soccana_tvcalib.parquet (must contain x1_px/y1_px/x2_px/y2_px
+columns), loads broadcast frames from the SSD, and writes one MP4 per clip to
 outputs/figures/annotated/.
 
 Usage:
     python scripts/render_annotated_clips.py                      # all clips
     python scripts/render_annotated_clips.py --clip SNGS-066      # one clip
-    python scripts/render_annotated_clips.py --detector soccana   # soccana detections
-    python scripts/render_annotated_clips.py --clip SNGS-066 --detector soccana
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 from pathlib import Path
 
 import cv2
-import numpy as np
 import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -28,7 +23,6 @@ FIGURES_DIR = OUTPUTS_DIR / "figures" / "annotated"
 GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 
 DETECTOR_PARQUETS = {
-    "yolov8x": OUTPUTS_DIR / "detections_pipeline_tvcalib.parquet",
     "soccana": OUTPUTS_DIR / "detections_soccana_tvcalib.parquet",
 }
 
@@ -108,17 +102,11 @@ def render_clip(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--clip", default=None, help="single clip ID, e.g. SNGS-066")
-    parser.add_argument(
-        "--detector",
-        default="soccana",
-        choices=list(DETECTOR_PARQUETS.keys()),
-        help="which detection parquet to use (default: soccana)",
-    )
     args = parser.parse_args()
 
-    parquet_path = DETECTOR_PARQUETS[args.detector]
+    parquet_path = DETECTOR_PARQUETS["soccana"]
     if not parquet_path.is_file():
-        raise FileNotFoundError(f"parquet not found: {parquet_path}\nRe-run the pipeline script first.")
+        raise FileNotFoundError(f"parquet not found: {parquet_path}\nRun scripts/run_soccana_tvcalib.py first.")
 
     df = pd.read_parquet(parquet_path)
 
@@ -127,7 +115,7 @@ def main() -> None:
     if missing:
         raise ValueError(
             f"parquet missing pixel bbox columns {missing}.\n"
-            "Re-run run_pipeline_tvcalib.py / run_soccana_tvcalib.py to regenerate."
+            "Re-run run_soccana_tvcalib.py to regenerate."
         )
 
     if args.clip:
@@ -135,13 +123,13 @@ def main() -> None:
     else:
         clip_ids = sorted(df["clip_id"].unique())
 
-    print(f"detector: {args.detector}  |  clips to render: {len(clip_ids)}")
+    print(f"clips to render: {len(clip_ids)}")
     assert GSR_ROOT.exists(), f"SoccerNet GSR not mounted: {GSR_ROOT}"
 
     for clip_id in clip_ids:
         clip_dets = df[df["clip_id"] == clip_id]
         action = clip_dets["action_class"].iloc[0] if len(clip_dets) else "unknown"
-        out_path = FIGURES_DIR / f"{clip_id}_{args.detector}.mp4"
+        out_path = FIGURES_DIR / f"{clip_id}_soccana.mp4"
         n = render_clip(clip_id, clip_dets, out_path)
         if n:
             print(f"  {clip_id} ({action}): {n} frames -> {out_path.relative_to(PROJECT_ROOT)}")

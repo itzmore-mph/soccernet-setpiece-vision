@@ -51,7 +51,7 @@ def main():
             hi = min(n_frames, centre + FRAME_WINDOW)
             # build image_id index for this clip
             id_for_frame = {
-                int(img["file_name"].rstrip(".jpg")): img["image_id"]
+                int(img["file_name"].removesuffix(".jpg")): img["image_id"]
                 for img in labels["images"] if img.get("file_name")
             }
             # build per-image annotation index

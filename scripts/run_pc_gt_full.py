@@ -9,11 +9,15 @@ Writes:
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pandas as pd
 
-from run_pc_tvcalib import process_track  # reuse logic
+# Ensure sibling scripts are importable when run from repo root
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _pipeline_core import process_track
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"

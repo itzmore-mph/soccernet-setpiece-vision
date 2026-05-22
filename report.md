@@ -1122,10 +1122,14 @@ soccernet-setpiece-vision/
         pitch_control_soccana_tvcalib.parquet
         pitch_control_gt_full.parquet
         ablation_detector_summary.parquet       # detection-count comparison
-        ablation_ks_summary.parquet             # detector ablation KS table
+        detections_soccana_tvcalib.parquet      # Soccana under TVCalib H (primary)
+        detections_gt_full.parquet              # GT for all 33 clips
+        homographies_tvcalib.parquet            # TVCalib H per frame (pre-computed)
+        pitch_control_soccana_tvcalib.parquet   # PC for primary pipeline
+        pitch_control_gt_full.parquet           # GT PC over 33-clip cohort
         validation_summary.parquet
         validation_paired.parquet
-        validation_summary_tvcalib.parquet      # 3-way H-source ablation KS table
+        validation_summary_tvcalib.parquet      # pipeline vs GT validation table
         figures/
             01_setpiece_counts.png ... 14_ks_table_tvcalib.png
             anim_corner_<clip_id>.gif
@@ -1133,16 +1137,13 @@ soccernet-setpiece-vision/
             still_corner_<clip_id>.png
             still_direct_free-kick_<clip_id>.png
     scripts/
-        _pipeline_core.py                       # shared helpers (detection, homography, team assign)
+        _pipeline_core.py                       # shared helpers (detection, homography, team assign, PC)
         download_soccernet.py
         dump_ball_positions.py / dump_gt_setpieces.py
-        run_soccana_ablation.py / run_pc_soccana.py
-        compare_detectors.py / ablation_ks_table.py
-        tvcalib_rmse_check.py / run_tvcalib_batch.py
-        run_pipeline_tvcalib.py / run_pc_tvcalib.py
-        run_pc_gt_full.py / ks_table_tvcalib.py
+        run_tvcalib_batch.py                    # homography computation (requires TVCalib)
         run_soccana_tvcalib.py / run_pc_soccana_tvcalib.py
-    CLAUDE.md
+        run_pc_gt_full.py / ks_table_tvcalib.py
+        render_annotated_clips.py
     requirements.txt
     report.md
 ```

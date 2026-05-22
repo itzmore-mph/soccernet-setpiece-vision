@@ -10,18 +10,18 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 ## Overview
 
-Reproducible, open-source pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
+Reproducible pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
 
 **Pipeline stages:**
-1. Player detection: YOLOv8x (off-the-shelf baseline) or Soccana YOLOv11n (football-finetuned, primary)
-2. Multi-object tracking: ByteTrack for persistent player IDs across frames
-3. Team assignment: KMeans on per-track mean HSV jersey colour, two-pass, once per clip
-4. Camera calibration: TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography from segmentation
-5. Pitch Control: Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m)
+1. Player detection — Soccana (YOLOv11n, football-finetuned)
+2. Multi-object tracking — ByteTrack for persistent player IDs across frames
+3. Team assignment — KMeans on per-track mean HSV jersey colour
+4. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography
+5. Pitch Control — Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m)
 
-**Validation:** Distributional comparison against SoccerNet GSR ground-truth annotations on 33 set-piece clips from the 2024 dataset. Distributional only — no frame-level matching, since SoccerNet GSR clips do not overlap with StatsBomb Euro 2024 matches.
+**Validation:** Distributional comparison (KS test, histogram overlap) against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
 
-**Key result (TVCalib + Soccana, primary configuration):** 33/33 clips processed end-to-end (zero homography failures vs 13/33 dropped in GT-line baseline). Bias near zero on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013); histogram overlap ≥ 0.81 on 4/5 metrics. Strict KS regresses (1/5 → 0/5) due to inflated power on n=457 vs n=286 frames; bias and overlap improve everywhere. Full ablation table in `report.md`.
+**Key result:** 33/33 clips processed end-to-end. Bias near zero on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013); histogram overlap ≥ 0.81 on 4/5 metrics.
 
 ---
 
@@ -29,167 +29,175 @@ Reproducible, open-source pipeline that derives Pitch Control from broadcast vid
 
 ```
 soccernet-setpiece-vision/
-├── notebooks/                # Five CRISP-DM phases, run in order 01 → 05
+├── notebooks/                    # Five CRISP-DM phases
 │   ├── 01_business_and_data_understanding.ipynb
 │   ├── 02_data_preparation_and_pipeline.ipynb
 │   ├── 03_pitch_control.ipynb
 │   ├── 04_evaluation_and_validation.ipynb
 │   └── 05_visualizations.ipynb
-├── scripts/                  # Reproducibility scripts (run after notebooks for ablations)
-│   ├── download_soccernet.py
-│   ├── dump_ball_positions.py
-│   ├── dump_gt_setpieces.py
-│   ├── repair_setpieces_freeze_frames.py
-│   ├── render_annotated_clips.py    # Render team-coloured bbox overlays to MP4
-│   ├── _pipeline_core.py            # Shared helpers (TVCalib scripts only, not for notebooks)
-│   │
-│   ├── # Detector ablation (YOLOv8x vs Soccana under GT-line H)
-│   ├── run_soccana_ablation.py
-│   ├── run_pc_soccana.py
-│   ├── compare_detectors.py
-│   ├── ablation_ks_table.py
-│   │
-│   ├── # TVCalib autonomous H pipeline (replaces GT-line homography leak)
-│   ├── tvcalib_rmse_check.py        # Phase 1: 5-frame sanity vs GT-line H
-│   ├── run_tvcalib_batch.py         # Phase 2: batch H over 33 clips × 16 frames
-│   ├── run_pipeline_tvcalib.py      # Phase 3: YOLOv8x detections under TVCalib H
-│   ├── run_pc_tvcalib.py            # Phase 4: PC for YOLOv8x + TVCalib
-│   ├── run_pc_gt_full.py            # Phase 4: GT PC over 33-clip cohort
-│   ├── ks_table_tvcalib.py          # Phase 4: 3-way KS table
-│   ├── run_soccana_tvcalib.py       # Phase 5: Soccana detections under TVCalib H
-│   └── run_pc_soccana_tvcalib.py    # Phase 5: PC for Soccana + TVCalib (primary config)
-├── outputs/                  # All Parquet outputs + figures/
-├── docs/                     # Project proposal and reference documents
+├── scripts/                      # Pipeline reproduction scripts
+│   ├── _pipeline_core.py         # Shared module (detection, tracking, PC model)
+│   ├── download_soccernet.py     # Data download (idempotent)
+│   ├── run_tvcalib_batch.py      # Homography computation (requires TVCalib, see note)
+│   ├── run_soccana_tvcalib.py    # Soccana detections under TVCalib H
+│   ├── dump_ball_positions.py    # Cache ball positions from SSD
+│   ├── dump_gt_setpieces.py      # GT detections for all 33 clips
+│   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
+│   ├── run_pc_gt_full.py         # Pitch control (GT reference)
+│   ├── ks_table_tvcalib.py       # Validation table + figure
+│   └── render_annotated_clips.py # Team-coloured bbox overlays to MP4
+├── outputs/                      # Parquet outputs + figures/
+├── docs/                         # Project proposal documents
+├── report.md                     # Thesis source (pandoc → PDF)
+├── requirements.txt              # pip freeze (lock snapshot)
 ├── CITATION.cff
-├── CLAUDE.md
-├── LICENSE
-├── README.md
-├── report.md                 # Thesis source (pandoc → PDF)
-└── requirements.txt          # pip freeze of py311-dev (lock snapshot, not curated)
+└── LICENSE
 ```
-
-Video data (~35 GB) lives on an external SSD (`SOCCERNET_LOCAL_DIR`), never in the repo. TVCalib lives in a sibling directory `../tvcalib/` with its own venv — see [TVCalib Setup](#tvcalib-setup-phases-13-only) below.
 
 ---
 
-## Setup
+## Prerequisites
 
-Requires **Python 3.11**. Install dependencies:
+- **Python 3.11** — install via [Miniconda](https://docs.anaconda.com/miniconda/) or any Python version manager
+- **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
+- **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
+
+**Note on homographies:** `outputs/homographies_tvcalib.parquet` contains pre-computed camera calibration matrices for all 33 clips, produced by [TVCalib](https://github.com/MM4SPA/tvcalib) (Theiner & Ewerth, WACV 2023). This file is included in the project folder and used directly by the pipeline. The script `scripts/run_tvcalib_batch.py` documents exactly how it was produced — regenerating it requires the TVCalib tool set up in a sibling directory (see the script's docstring for full setup instructions).
+
+---
+
+## Quick Start (from committed outputs, no SSD needed)
+
+Notebooks 03–05 read from committed Parquet files and require no video data.
 
 ```bash
+# 1. Install dependencies (Python 3.11 required)
+pip install -r requirements.txt
+
+# 2. Run analysis notebooks (order matters)
+jupyter nbconvert --to notebook --execute notebooks/03_pitch_control.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/04_evaluation_and_validation.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --inplace
+
+# 3. Run validation table (from committed pipeline outputs)
+python scripts/ks_table_tvcalib.py
+```
+
+Or open each notebook in JupyterLab / VS Code and run interactively.
+
+---
+
+## Full Reproduction (from raw video data)
+
+Reproduces all results end-to-end from the SoccerNet GSR video clips.
+
+### 1. Environment setup
+
+```bash
+# Create a fresh conda environment (one-time)
+conda create -n py311-dev python=3.11 -y
+conda activate py311-dev
+
+# Install all dependencies
 pip install -r requirements.txt
 ```
 
-Open notebooks in any Jupyter-compatible environment (JupyterLab, VS Code, PyCharm) and select a Python 3.11 kernel, or run non-interactively:
+If you don't use conda, any Python 3.11 environment works — just run `pip install -r requirements.txt`.
+
+### 2. Configure data paths
+
+Create `.env` in the project root:
+
+```env
+SOCCERNET_PASSWORD=your_password_here
+SOCCERNET_LOCAL_DIR=/Volumes/MPH-ExternalStorage/soccernet-gsr
+```
+
+The `SOCCERNET_LOCAL_DIR` defaults to the Mac SSD path if not set. On Windows/Linux, set it to your local mount point.
+
+### 3. Download SoccerNet GSR data
+
+```bash
+python scripts/download_soccernet.py
+```
+
+Idempotent — skips splits already on disk.
+
+### 4. Run notebook 01 — Business & Data Understanding
 
 ```bash
 jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
 ```
 
+Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`. Requires internet (StatsBomb API, cached after first run).
+
+### 5. Run notebook 02 — Data Preparation & Pipeline (legacy baseline)
+
 ```bash
-# Download SoccerNet GSR (requires SOCCERNET_PASSWORD in .env)
-python scripts/download_soccernet.py
+jupyter nbconvert --to notebook --execute notebooks/02_data_preparation_and_pipeline.ipynb --inplace
 ```
 
-Notebooks run in order (01 → 05). Outputs cached as Parquet so nb03–nb05 re-execute offline. Soccana weights auto-fetched from HuggingFace (`Adit-jain/soccana`) on first ablation run; YOLOv8x weights auto-downloaded by ultralytics.
+Requires SSD. Produces: `outputs/detections_pipeline.parquet`, `outputs/detections_gt.parquet`, `outputs/pipeline_diagnostics.parquet`.
 
----
-
-## Reproducibility Without the Raw Data
-
-All intermediate outputs are committed to the repo. Anyone without access to the SoccerNet GSR video clips can reproduce every result downstream of detection by checking out this repo and running:
+### 6. Run the primary pipeline (Soccana + TVCalib)
 
 ```bash
-conda activate py311-dev
+# Run Soccana detector + ByteTrack + team assignment (~30 min, SSD required)
+python scripts/run_soccana_tvcalib.py
+
+# Cache ball positions and GT detections from SSD
+python scripts/dump_ball_positions.py
+python scripts/dump_gt_setpieces.py
+
+# Compute pitch control surfaces (SSD-free from here)
+python scripts/run_pc_soccana_tvcalib.py
+python scripts/run_pc_gt_full.py
+
+# Generate validation table
+python scripts/ks_table_tvcalib.py
+```
+
+Produces:
+- `outputs/detections_soccana_tvcalib.parquet`
+- `outputs/ball_positions.parquet`
+- `outputs/detections_gt_full.parquet`
+- `outputs/pitch_control_soccana_tvcalib.parquet`
+- `outputs/pitch_control_gt_full.parquet`
+- `outputs/validation_summary_tvcalib.parquet`
+- `outputs/figures/14_ks_table_tvcalib.png`
+
+### 7. Run notebook 03 — Pitch Control
+
+```bash
 jupyter nbconvert --to notebook --execute notebooks/03_pitch_control.ipynb --inplace
+```
+
+Requires SSD (reads ball positions from `Labels-GameState.json`). Reads `detections_pipeline.parquet` and `detections_gt.parquet` from step 5. Produces: `outputs/pitch_control.parquet`.
+
+### 8. Run notebook 04 — Evaluation & Validation
+
+```bash
 jupyter nbconvert --to notebook --execute notebooks/04_evaluation_and_validation.ipynb --inplace
+```
+
+SSD-free. Reads `pitch_control.parquet` from step 7. Produces: `outputs/validation_summary.parquet`, `outputs/validation_paired.parquet`.
+
+### 9. Run notebook 05 — Visualizations
+
+```bash
 jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --inplace
 ```
 
-These notebooks read from committed Parquet files in `outputs/` and write all figures to `outputs/figures/`. No SSD or internet access required beyond the initial `conda activate`.
+Requires SSD (reads broadcast frames for overlays). Produces: animated GIFs and static figures in `outputs/figures/`.
 
-Notebook 01 fetches StatsBomb Open Data via `statsbombpy` (auto-cached to `~/.cache/statsbombpy/`) and produces `outputs/setpieces.parquet` and `outputs/gt_spatial_benchmarks.parquet` (GT player spatial statistics used as validation benchmarks in nb04). Notebook 02 requires the SSD and produces the detection Parquets; its committed outputs are already in `outputs/` so nb02 re-execution is optional for result verification.
-
-**Scripts that require the SSD** (phases 1–3 of both ablations): `download_soccernet.py`, `run_soccana_ablation.py`, `run_pipeline_tvcalib.py`, `run_soccana_tvcalib.py`, `tvcalib_rmse_check.py`, `run_tvcalib_batch.py`, `render_annotated_clips.py`.
-
-**Scripts that are SSD-free** (phases 4–5): `run_pc_*.py`, `run_pc_gt_full.py`, `ablation_ks_table.py`, `ks_table_tvcalib.py`, `dump_ball_positions.py` (reads committed Parquet).
-
----
-
-## TVCalib Setup (Phases 1–3 Only)
-
-TVCalib is only needed to re-run camera calibration from raw frames. If you are reproducing results from the committed Parquet outputs, skip this section.
-
-TVCalib lives in a **sibling directory** outside this repo with its own Python venv. It is not a submodule of this project.
+### 10. (Optional) Render annotated broadcast clips
 
 ```bash
-# 1. Clone TVCalib alongside this repo
-cd ..
-git clone https://github.com/MM4SPA/tvcalib.git
-cd tvcalib
-git submodule update --init --recursive
-# submodule: sn_segmentation at commit ffdb308
-
-# 2. Create the TVCalib venv (Python 3.11, separate from py311-dev)
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install torch==2.1.* torchvision kornia==0.8.2 pytorch-lightning==2.6.1
-pip install SoccerNet==0.1.62 opencv-python numpy
-
-# 3. Download the segmentation checkpoint (~466 MB)
-mkdir -p data/segment_localization
-# checkpoint: tvcalib/data/segment_localization/train_59.pt
-# Download from the MM4SPA/tvcalib release or HuggingFace model card
-# (see upstream README for the current download link)
-
-# 4. Apply two patches for PyTorch 2.x compatibility
+python scripts/render_annotated_clips.py                  # all clips
+python scripts/render_annotated_clips.py --clip SNGS-066  # single clip
 ```
 
-**Patch 1** — `tvcalib/sncalib_dataset.py`, line 13: replace the broken import:
-```python
-# before
-from torch._six import string_classes
-# after
-string_classes = (str, bytes)
-```
-
-**Patch 2** — `tvcalib/inference.py`, line 89: add `weights_only=False`:
-```python
-# before
-checkpoint = torch.load(checkpoint_path, map_location=device)
-# after
-checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-```
-
-After setup, the scripts in this repo invoke TVCalib by calling `tvcalib/run_inference.py` via subprocess. No import of TVCalib into `py311-dev` is needed.
-
----
-
-## Reproducing the Ablations
-
-After running the five notebooks, two ablations extend the analysis:
-
-**Detector ablation (YOLOv8x vs Soccana, fixed H):**
-```bash
-python scripts/run_soccana_ablation.py
-python scripts/run_pc_soccana.py
-python scripts/ablation_ks_table.py
-```
-
-**H-source ablation (GT-line baseline vs TVCalib autonomous):**
-```bash
-python scripts/tvcalib_rmse_check.py            # Phase 1 sanity
-python scripts/run_tvcalib_batch.py             # Phase 2 batch H
-python scripts/run_pipeline_tvcalib.py          # Phase 3 detections
-python scripts/dump_ball_positions.py
-python scripts/dump_gt_setpieces.py
-python scripts/run_pc_tvcalib.py
-python scripts/run_pc_gt_full.py
-python scripts/ks_table_tvcalib.py              # Phase 4 KS
-python scripts/run_soccana_tvcalib.py           # Phase 5 best combo
-python scripts/run_pc_soccana_tvcalib.py
-python scripts/ks_table_tvcalib.py              # auto-includes Soccana row
-```
+Produces: MP4 files in `outputs/figures/annotated/`.
 
 ---
 
@@ -201,8 +209,7 @@ python scripts/ks_table_tvcalib.py              # auto-includes Soccana row
 | Pipeline / mplsoccer | 105 m × 68 m, origin top-left |
 | SoccerNet GSR `bbox_pitch` | centred origin (±52.5 m, ±34 m) |
 
-`x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`
-GSR centred → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`
+Conversions: `x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`. GSR → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`.
 
 ---
 
@@ -210,7 +217,7 @@ GSR centred → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`
 
 See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
-### SoccerNet Game State Reconstruction (dataset and annotations)
+### SoccerNet Game State Reconstruction
 
 ```bibtex
 @inproceedings{Somers2024SoccerNetGameState,
@@ -227,7 +234,7 @@ See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 }
 ```
 
-### TVCalib (autonomous camera calibration)
+### TVCalib
 
 ```bibtex
 @inproceedings{Theiner2023TVCalib,
@@ -242,7 +249,7 @@ See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
 Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`. https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking
 
-### ByteTrack (multi-object tracking)
+### ByteTrack
 
 ```bibtex
 @inproceedings{zhang2022bytetrack,
@@ -256,7 +263,7 @@ Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Re
 
 ### Other dependencies
 
-- Jocher, G. et al. (2023). *Ultralytics YOLOv8 / YOLOv11*. https://github.com/ultralytics/ultralytics
+- Jocher, G. et al. (2023). *Ultralytics YOLO*. https://github.com/ultralytics/ultralytics
 - Adit Jain. *Soccana: YOLOv11n football detector*. HuggingFace: `Adit-jain/soccana`.
 - StatsBomb (2024). *StatsBomb Open Data*. https://github.com/statsbomb/open-data
 - Spearman, W. (2018). Beyond Expected Goals. MIT Sloan Sports Analytics Conference.

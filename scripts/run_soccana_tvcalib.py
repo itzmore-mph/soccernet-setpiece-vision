@@ -10,11 +10,22 @@ Writes:
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
+import torch
 import pandas as pd
 from huggingface_hub import hf_hub_download
+
+# PyTorch 2.6 changed weights_only default to True; ultralytics .pt weights
+# contain arbitrary globals and require weights_only=False.
+_orig_torch_load = torch.load
+torch.load = lambda *a, **kw: _orig_torch_load(*a, **{**kw, "weights_only": False})
+
 from ultralytics import YOLO
+
+# Ensure sibling scripts are importable when run from repo root
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _pipeline_core import (
     DEVICE,

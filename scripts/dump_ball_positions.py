@@ -14,8 +14,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GSR = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
-OUT = Path("outputs")
+OUT = PROJECT_ROOT / "outputs"
 PITCH_L, PITCH_W = 105.0, 68.0
 
 
@@ -32,6 +33,8 @@ def main() -> None:
 
     rows = []
     labels_cache: dict = {}
+    image_id_cache: dict = {}  # (split, clip_id) -> {filename: image_id}
+    ann_ball_cache: dict = {}  # (split, clip_id) -> {image_id: (bx, by)}
     for _, k in keys.iterrows():
         cache_key = (k["split"], k["clip_id"])
         if cache_key not in labels_cache:
@@ -41,18 +44,17 @@ def main() -> None:
                     labels_cache[cache_key] = json.load(f)
             except Exception:
                 labels_cache[cache_key] = None
-        labels = labels_cache[cache_key]
-        bx, by = np.nan, np.nan
-        if labels is not None:
-            fname = f"{int(k['frame_idx']):06d}.jpg"
-            image_id = next(
-                (img["image_id"] for img in labels["images"]
-                 if img.get("file_name") == fname),
-                None,
-            )
-            if image_id is not None:
+            # Pre-build lookup indices for this clip
+            labels = labels_cache[cache_key]
+            if labels is not None:
+                image_id_cache[cache_key] = {
+                    img.get("file_name"): img.get("image_id")
+                    for img in labels["images"]
+                    if img.get("file_name")
+                }
+                ball_lookup: dict = {}
                 for a in labels["annotations"]:
-                    if a.get("image_id") != image_id or a.get("category_id") != 4:
+                    if a.get("category_id") != 4:
                         continue
                     bp = a.get("bbox_pitch")
                     if not bp:
@@ -61,9 +63,21 @@ def main() -> None:
                     yc = bp.get("y_bottom_middle")
                     if xc is None or yc is None:
                         continue
-                    bx = float(xc) + PITCH_L / 2
-                    by = float(yc) + PITCH_W / 2
-                    break
+                    ball_lookup[a.get("image_id")] = (
+                        float(xc) + PITCH_L / 2,
+                        float(yc) + PITCH_W / 2,
+                    )
+                ann_ball_cache[cache_key] = ball_lookup
+
+        bx, by = np.nan, np.nan
+        labels = labels_cache[cache_key]
+        if labels is not None:
+            fname = f"{int(k['frame_idx']):06d}.jpg"
+            image_id = image_id_cache.get(cache_key, {}).get(fname)
+            if image_id is not None:
+                ball_pos = ann_ball_cache.get(cache_key, {}).get(image_id)
+                if ball_pos is not None:
+                    bx, by = ball_pos
         rows.append({**k.to_dict(), "ball_x_m": bx, "ball_y_m": by})
 
     df = pd.DataFrame(rows)

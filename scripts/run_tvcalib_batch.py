@@ -1,12 +1,29 @@
-"""Phase 2 batch TVCalib: compute autonomous H for every set-piece frame.
+"""Batch TVCalib: compute autonomous homographies for all set-piece frames.
 
 Discovers all SoccerNet GSR clips with action_class in {Corner, Direct free-kick},
-stages a +/-15 frame window around action_position into a temp dir, runs TVCalib
+stages a ±15 frame window around action_position into a temp dir, runs TVCalib
 once over the lot, writes outputs/homographies_tvcalib.parquet keyed
 (split, clip_id, frame_idx).
 
+Requirements:
+    - SoccerNet GSR data on SSD (SOCCERNET_LOCAL_DIR env var)
+    - TVCalib repo at ../tvcalib/ with its own venv (.venv/) set up:
+        cd ../tvcalib
+        python3.11 -m venv .venv
+        source .venv/bin/activate
+        pip install torch==2.1.* torchvision kornia==0.8.2 pytorch-lightning==2.6.1
+        pip install SoccerNet==0.1.62 opencv-python numpy
+      Patches for PyTorch 2.x:
+        - sncalib_dataset.py line 13: replace `from torch._six import string_classes`
+          with `string_classes = (str, bytes)`
+        - inference.py line 89: add `weights_only=False` to torch.load()
+      Segmentation checkpoint: tvcalib/data/segment_localization/train_59.pt
+
 Idempotent on stage (skips already-copied frames). TVCalib re-runs every call;
 delete /tmp/tvcalib_batch_out/calib.json to force re-stage only.
+
+Writes:
+    outputs/homographies_tvcalib.parquet
 """
 from __future__ import annotations
 
@@ -87,10 +104,22 @@ def run_tvcalib() -> dict:
     if cache.is_file():
         print(f"using cached {cache}")
         return json.loads(cache.read_text())
+
+    tvcalib_python = TVCALIB_ROOT / ".venv/bin/python"
+    tvcalib_script = TVCALIB_ROOT / "run_inference.py"
+
+    if not tvcalib_python.is_file():
+        raise FileNotFoundError(
+            f"TVCalib venv not found at {tvcalib_python}\n"
+            "Set up TVCalib in a sibling directory — see this script's docstring for instructions."
+        )
+    if not tvcalib_script.is_file():
+        raise FileNotFoundError(f"TVCalib inference script not found at {tvcalib_script}")
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     cmd = [
-        str(TVCALIB_ROOT / ".venv/bin/python"),
-        str(TVCALIB_ROOT / "run_inference.py"),
+        str(tvcalib_python),
+        str(tvcalib_script),
         "--images_path", str(STAGE_DIR),
         "--output_dir", str(OUT_DIR),
         "--image_width", "1920",
@@ -134,6 +163,8 @@ def parse_results(results: dict) -> pd.DataFrame:
 
 
 def main():
+    assert SSD_ROOT.exists(), f"SoccerNet GSR not mounted: {SSD_ROOT}"
+
     clips = discover_clips()
     print(f"discovered {len(clips)} set-piece clips")
     n_expected = stage(clips)
