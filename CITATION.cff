@@ -94,3 +94,29 @@ references:
       - name: "StatsBomb"
     year: 2024
     repository-code: "https://github.com/statsbomb/open-data"
+
+  - type: conference-paper
+    title: "TVCalib: Camera Calibration for Sports Field Registration in Soccer"
+    authors:
+      - family-names: Theiner
+        given-names: Jonas
+      - family-names: Ewerth
+        given-names: Ralph
+    collection-title: "Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)"
+    year: 2023
+
+  - type: software
+    title: "Soccana: YOLOv11n football detector"
+    authors:
+      - family-names: Jain
+        given-names: Adit
+    year: 2024
+    url: "https://huggingface.co/Adit-jain/soccana"
+
+  - type: conference-paper
+    title: "Beyond Expected Goals"
+    authors:
+      - family-names: Spearman
+        given-names: William
+    collection-title: "MIT Sloan Sports Analytics Conference"
+    year: 2018

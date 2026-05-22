@@ -58,7 +58,7 @@ soccernet-setpiece-vision/
 │   ├── run_soccana_tvcalib.py       # Phase 5: Soccana detections under TVCalib H
 │   └── run_pc_soccana_tvcalib.py    # Phase 5: PC for Soccana + TVCalib (primary config)
 ├── outputs/                  # All Parquet outputs + figures/
-├── docs/
+├── docs/                     # Project proposal and reference documents
 ├── CITATION.cff
 ├── CLAUDE.md
 ├── LICENSE
