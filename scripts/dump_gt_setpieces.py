@@ -1,11 +1,10 @@
 """Dump GT player detections for all 33 set-piece clips' frame windows.
 
-Extends `outputs/detections_gt.parquet` (which only covers 20 clips that survived
-GT-pitch-line homography in nb02) to cover all 33 clips. Writes
-`outputs/detections_gt_full.parquet` with the same schema as detections_gt.
+Writes `outputs/detections_gt_full.parquet` containing ground-truth pitch
+positions for every player annotation in the ±15-frame window around each
+set-piece action.
 
-Used by run_pc_tvcalib + ablation comparisons that need GT for the 13 clips
-that nb02 originally skipped.
+Used by run_pc_gt_full.py and validation (ks_table_tvcalib.py).
 """
 from __future__ import annotations
 

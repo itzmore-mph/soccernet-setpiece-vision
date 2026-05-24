@@ -1,4 +1,4 @@
-"""Compute GT pitch control over all 33 set-piece clips (not just 20 from baseline).
+"""Compute GT pitch control over all 33 set-piece clips.
 
 Reads:
     outputs/detections_gt_full.parquet  (team col = 'team', all 33 clips)

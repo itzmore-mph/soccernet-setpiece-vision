@@ -37,6 +37,8 @@ example/
 *.onnx
 
 # Outputs: keep parquet + figures (small, reproducible-from-notebooks)
-# Annotated broadcast clips are large MP4s, excluded from repo.
+# Large video files excluded from repo.
 outputs/figures/annotated/
+outputs/figures/overlay/
+outputs/figures/*.mp4
 report.pdf

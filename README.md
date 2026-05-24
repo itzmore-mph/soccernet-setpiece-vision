@@ -19,9 +19,7 @@ Reproducible pipeline that derives Pitch Control from broadcast video without pr
 4. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography
 5. Pitch Control — Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m)
 
-**Validation:** Distributional comparison (KS test, histogram overlap) against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
-
-**Key result:** 33/33 clips processed end-to-end. Bias near zero on `pc_at_ball` (Δ=+0.001) and `pc_in_box` (Δ=+0.013); histogram overlap ≥ 0.81 on 4/5 metrics.
+**Validation:** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
 
 ---
 
@@ -29,12 +27,11 @@ Reproducible pipeline that derives Pitch Control from broadcast video without pr
 
 ```
 soccernet-setpiece-vision/
-├── notebooks/                    # Five CRISP-DM phases
+├── notebooks/                    # Four CRISP-DM phases
 │   ├── 01_business_and_data_understanding.ipynb
-│   ├── 02_data_preparation_and_pipeline.ipynb
-│   ├── 03_pitch_control.ipynb
-│   ├── 04_evaluation_and_validation.ipynb
-│   └── 05_visualizations.ipynb
+│   ├── 02_pitch_control.ipynb
+│   ├── 03_evaluation_and_validation.ipynb
+│   └── 04_visualizations.ipynb
 ├── scripts/                      # Pipeline reproduction scripts
 │   ├── _pipeline_core.py         # Shared module (detection, tracking, PC model)
 │   ├── download_soccernet.py     # Data download (idempotent)
@@ -45,11 +42,12 @@ soccernet-setpiece-vision/
 │   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
 │   ├── run_pc_gt_full.py         # Pitch control (GT reference)
 │   ├── ks_table_tvcalib.py       # Validation table + figure
-│   └── render_annotated_clips.py # Team-coloured bbox overlays to MP4
+│   ├── render_annotated_clips.py # Team-coloured bbox overlays to MP4
+│   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
 ├── outputs/                      # Parquet outputs + figures/
 ├── docs/                         # Project proposal documents
 ├── report.md                     # Thesis source (pandoc → PDF)
-├── requirements.txt              # pip freeze (lock snapshot)
+├── requirements.txt              # Direct dependencies with version ranges
 ├── CITATION.cff
 └── LICENSE
 ```
@@ -68,16 +66,16 @@ soccernet-setpiece-vision/
 
 ## Quick Start (from committed outputs, no SSD needed)
 
-Notebooks 03–05 read from committed Parquet files and require no video data.
+Notebooks 02–04 read from committed Parquet files and require no video data.
 
 ```bash
 # 1. Install dependencies (Python 3.11 required)
 pip install -r requirements.txt
 
 # 2. Run analysis notebooks (order matters)
-jupyter nbconvert --to notebook --execute notebooks/03_pitch_control.ipynb --inplace
-jupyter nbconvert --to notebook --execute notebooks/04_evaluation_and_validation.ipynb --inplace
-jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
 
 # 3. Run validation table (from committed pipeline outputs)
 python scripts/ks_table_tvcalib.py
@@ -94,15 +92,10 @@ Reproduces all results end-to-end from the SoccerNet GSR video clips.
 ### 1. Environment setup
 
 ```bash
-# Create a fresh conda environment (one-time)
 conda create -n py311-dev python=3.11 -y
 conda activate py311-dev
-
-# Install all dependencies
 pip install -r requirements.txt
 ```
-
-If you don't use conda, any Python 3.11 environment works — just run `pip install -r requirements.txt`.
 
 ### 2. Configure data paths
 
@@ -113,15 +106,11 @@ SOCCERNET_PASSWORD=your_password_here
 SOCCERNET_LOCAL_DIR=/Volumes/MPH-ExternalStorage/soccernet-gsr
 ```
 
-The `SOCCERNET_LOCAL_DIR` defaults to the Mac SSD path if not set. On Windows/Linux, set it to your local mount point.
-
 ### 3. Download SoccerNet GSR data
 
 ```bash
 python scripts/download_soccernet.py
 ```
-
-Idempotent — skips splits already on disk.
 
 ### 4. Run notebook 01 — Business & Data Understanding
 
@@ -129,20 +118,12 @@ Idempotent — skips splits already on disk.
 jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
 ```
 
-Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`. Requires internet (StatsBomb API, cached after first run).
+Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`.
 
-### 5. Run notebook 02 — Data Preparation & Pipeline (legacy baseline)
-
-```bash
-jupyter nbconvert --to notebook --execute notebooks/02_data_preparation_and_pipeline.ipynb --inplace
-```
-
-Requires SSD. Produces: `outputs/detections_pipeline.parquet`, `outputs/detections_gt.parquet`, `outputs/pipeline_diagnostics.parquet`.
-
-### 6. Run the primary pipeline (Soccana + TVCalib)
+### 5. Run the pipeline (Soccana + TVCalib)
 
 ```bash
-# Run Soccana detector + ByteTrack + team assignment (~30 min, SSD required)
+# Soccana detector + ByteTrack + team assignment (~30 min, SSD required)
 python scripts/run_soccana_tvcalib.py
 
 # Cache ball positions and GT detections from SSD
@@ -157,47 +138,32 @@ python scripts/run_pc_gt_full.py
 python scripts/ks_table_tvcalib.py
 ```
 
-Produces:
-- `outputs/detections_soccana_tvcalib.parquet`
-- `outputs/ball_positions.parquet`
-- `outputs/detections_gt_full.parquet`
-- `outputs/pitch_control_soccana_tvcalib.parquet`
-- `outputs/pitch_control_gt_full.parquet`
-- `outputs/validation_summary_tvcalib.parquet`
-- `outputs/figures/14_ks_table_tvcalib.png`
-
-### 7. Run notebook 03 — Pitch Control
+### 6. Run notebook 02 — Pitch Control
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/03_pitch_control.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
 ```
 
-Requires SSD (reads ball positions from `Labels-GameState.json`). Reads `detections_pipeline.parquet` and `detections_gt.parquet` from step 5. Produces: `outputs/pitch_control.parquet`.
-
-### 8. Run notebook 04 — Evaluation & Validation
+### 7. Run notebook 03 — Evaluation & Validation
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/04_evaluation_and_validation.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
 ```
 
-SSD-free. Reads `pitch_control.parquet` from step 7. Produces: `outputs/validation_summary.parquet`, `outputs/validation_paired.parquet`.
-
-### 9. Run notebook 05 — Visualizations
+### 8. Run notebook 04 — Visualizations
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/05_visualizations.ipynb --inplace
+jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
 ```
 
-Requires SSD (reads broadcast frames for overlays). Produces: animated GIFs and static figures in `outputs/figures/`.
+Requires SSD (reads broadcast frames for overlays).
 
-### 10. (Optional) Render annotated broadcast clips
+### 9. (Optional) Render annotated broadcast clips
 
 ```bash
-python scripts/render_annotated_clips.py                  # all clips
-python scripts/render_annotated_clips.py --clip SNGS-066  # single clip
+python scripts/render_annotated_clips.py
+python scripts/render_pc_overlay.py
 ```
-
-Produces: MP4 files in `outputs/figures/annotated/`.
 
 ---
 
@@ -217,55 +183,13 @@ Conversions: `x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`. GSR → Pipelin
 
 See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
-### SoccerNet Game State Reconstruction
-
-```bibtex
-@inproceedings{Somers2024SoccerNetGameState,
-  title   = {{SoccerNet} Game State Reconstruction: End-to-End Athlete Tracking and Identification on a Minimap},
-  author  = {Somers, Vladimir and Joos, Victor and Giancola, Silvio and Cioppa, Anthony
-             and Ghasemzadeh, Seyed Abolfazl and Magera, Floriane and Standaert, Baptiste
-             and Mansourian, Amir Mohammad and Zhou, Xin and Kasaei, Shohreh
-             and Ghanem, Bernard and Alahi, Alexandre
-             and Van Droogenbroeck, Marc and De Vleeschouwer, Christophe},
-  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)},
-  month   = {Jun},
-  year    = {2024},
-  address = {Seattle, WA, USA},
-}
-```
-
-### TVCalib
-
-```bibtex
-@inproceedings{Theiner2023TVCalib,
-  title     = {{TVCalib}: Camera Calibration for Sports Field Registration in Soccer},
-  author    = {Theiner, Jonas and Ewerth, Ralph},
-  booktitle = {Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
-  year      = {2023},
-}
-```
-
-### Pitch Control model
-
-Shaw, L. (2020). *Friends of Tracking: Pitch Control implementation*. GitHub. Reference commit: `21f4c2d`. https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking
-
-### ByteTrack
-
-```bibtex
-@inproceedings{zhang2022bytetrack,
-  title   = {{ByteTrack}: Multi-Object Tracking by Associating Every Detection Box},
-  author  = {Zhang, Yifu and Sun, Peize and Jiang, Yi and Yu, Dongdong and Weng, Fucheng
-             and Yuan, Zehuan and Luo, Ping and Liu, Wenyu and Wang, Xinggang},
-  booktitle = {Proceedings of the European Conference on Computer Vision (ECCV)},
-  year    = {2022},
-}
-```
-
-### Other dependencies
-
-- Jocher, G. et al. (2023). *Ultralytics YOLO*. https://github.com/ultralytics/ultralytics
-- Adit Jain. *Soccana: YOLOv11n football detector*. HuggingFace: `Adit-jain/soccana`.
-- StatsBomb (2024). *StatsBomb Open Data*. https://github.com/statsbomb/open-data
+- Somers et al. (2024). SoccerNet Game State Reconstruction. CVPRW 2024.
+- Theiner & Ewerth (2023). TVCalib: Camera Calibration for Sports Field Registration in Soccer. WACV 2023.
+- Shaw, L. (2020). Pitch Control model. Friends of Tracking Data. Commit `21f4c2d`.
+- Zhang et al. (2022). ByteTrack: Multi-Object Tracking by Associating Every Detection Box. ECCV 2022.
+- Jocher et al. (2023). Ultralytics YOLO.
+- Adit Jain. Soccana: YOLOv11n football detector. HuggingFace: `Adit-jain/soccana`.
+- StatsBomb (2024). StatsBomb Open Data.
 - Spearman, W. (2018). Beyond Expected Goals. MIT Sloan Sports Analytics Conference.
 
 ---

@@ -1,11 +1,11 @@
 """
 Dump ball metric-pitch positions for all (split, clip_id, frame_idx) combos
-present in detections_pipeline.parquet or detections_gt.parquet.
+present in detections_soccana_tvcalib.parquet or detections_gt_full.parquet.
 
 Output: outputs/ball_positions.parquet (split, clip_id, frame_idx, ball_x_m, ball_y_m).
 
-Reason: nb03 currently parses Labels-GameState.json from the SSD per frame.
-Caching to parquet lets nb03 + nb04 run offline (without the SSD mounted).
+Reason: nb02 + nb03 need ball positions for pitch control computation.
+Caching to parquet lets downstream notebooks run offline (without the SSD mounted).
 """
 import json
 import os
@@ -21,14 +21,10 @@ PITCH_L, PITCH_W = 105.0, 68.0
 
 
 def main() -> None:
-    pipe = pd.read_parquet(OUT / "detections_pipeline.parquet")
-    gt = pd.read_parquet(OUT / "detections_gt.parquet")
+    pipe = pd.read_parquet(OUT / "detections_soccana_tvcalib.parquet")
+    gt = pd.read_parquet(OUT / "detections_gt_full.parquet")
     sources = [pipe[["split", "clip_id", "frame_idx"]],
                gt[["split", "clip_id", "frame_idx"]]]
-    tv_path = OUT / "detections_pipeline_tvcalib.parquet"
-    if tv_path.is_file():
-        tv = pd.read_parquet(tv_path)
-        sources.append(tv[["split", "clip_id", "frame_idx"]])
     keys = pd.concat(sources).drop_duplicates().reset_index(drop=True)
 
     rows = []
