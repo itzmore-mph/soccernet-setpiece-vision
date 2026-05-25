@@ -31,9 +31,9 @@ Optical player tracking powers modern tactical analysis but remains commercially
 - Soccana detects players in all 33/33 clips with zero homography failures (detection phase).
 - Pitch Control is computed for 31 pipeline clips and 31 GT clips; 2 clips (SNGS-125, SNGS-145) are excluded from the PC phase due to missing ball annotations in all frames.
 - `pc_at_ball` (control at ball location): bias = -0.051, histogram overlap = 0.804, per-frame Pearson r = 0.511.
-- `pc_in_third` is the most reliable metric: bias ≈ 0 (+0.000), histogram overlap = 0.896.
-- `pc_in_box` has the largest systematic error (+0.223 bias): KMeans team assignment degrades in crowded penalty areas during corners, inverting the team label in that zone for a subset of frames.
-- Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18: pipeline detects fewer players per frame (mean 15.99 vs GT 18.69) with a larger shortfall on the defending team, compressing attacking control across the surface under the Shaw model.
+- `pc_in_third` is the most reliable metric: bias = +0.010, histogram overlap = 0.903.
+- `pc_in_box` has the largest systematic error (+0.216 bias): KMeans team assignment degrades in crowded penalty areas during corners, inverting the team label in that zone for a subset of frames.
+- Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.15–0.16: pipeline detects fewer players per frame (mean 15.99 vs GT 18.69) with a larger shortfall on the defending team, compressing attacking control across the surface under the Shaw model.
 - Full pipeline runs on a standard consumer laptop (~30 min on Apple Silicon MPS, longer on CPU-only hardware), no cloud dependency.
 
 **Impact.** A broadcast-only Pitch Control pipeline that produces distributionally honest estimates of the most operationally meaningful set-piece signal, deployable by any club with broadcast video access and a laptop.
@@ -151,9 +151,11 @@ SoccerNet GSR clips (external SSD)
          v
 +----------------------------------+
 |  Soccana + ByteTrack             |
-|  - Player detection (YOLOv11n)   |
+|  - Player + Referee detection    |
+|    (YOLOv11n, classes 0 + 2)     |
 |  - Persistent track IDs          |
 |  - KMeans HSV team assignment    |
+|    (players only; refs team=-1)  |
 +----------------------------------+
          |
          v
@@ -344,21 +346,21 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 
 | Metric | Pipeline | GT | Delta (bias) | KS stat | KS p-value | Hist. overlap | Passes KS? |
 |---|---|---|---|---|---|---|---|
-| pc_mean | 0.515 | 0.687 | -0.172 | 0.306 | <0.001 | 0.695 | No |
-| pc_at_ball | 0.927 | 0.978 | -0.051 | 0.371 | <0.001 | 0.804 | No |
-| pc_in_box | 0.539 | 0.316 | **+0.223** | 0.554 | <0.001 | 0.475 | No |
-| **pc_in_third** | **0.513** | **0.513** | **+0.000** | 0.070 | 0.019 | **0.896** | No |
-| pc_area_gt_0p5 | 0.521 | 0.703 | -0.182 | 0.293 | <0.001 | 0.692 | No |
+| pc_mean | 0.539 | 0.687 | -0.148 | 0.275 | <0.001 | 0.727 | No |
+| pc_at_ball | 0.927 | 0.978 | -0.051 | 0.339 | <0.001 | 0.804 | No |
+| pc_in_box | 0.532 | 0.316 | **+0.216** | 0.532 | <0.001 | 0.499 | No |
+| **pc_in_third** | **0.523** | **0.513** | **+0.010** | 0.104 | <0.001 | **0.903** | No |
+| pc_area_gt_0p5 | 0.548 | 0.703 | -0.155 | 0.261 | <0.001 | 0.721 | No |
 
 **Per-frame paired comparison (n=940 paired frames):**
 
 | Metric | Pearson r | Spearman r | MAE | Bias |
 |---|---|---|---|---|
-| pc_mean | 0.285 | 0.060 | 0.229 | -0.173 |
-| pc_at_ball | **0.511** | 0.096 | **0.054** | -0.051 |
-| pc_in_box | 0.175 | 0.067 | 0.244 | +0.224 |
-| **pc_in_third** | -0.055 | -0.069 | **0.119** | **+0.000** |
-| pc_area_gt_0p5 | 0.260 | 0.080 | 0.249 | -0.182 |
+| pc_mean | 0.349 | 0.199 | 0.206 | -0.149 |
+| pc_at_ball | **0.511** | 0.106 | **0.054** | -0.051 |
+| pc_in_box | 0.178 | 0.070 | 0.238 | +0.217 |
+| **pc_in_third** | 0.056 | 0.045 | **0.112** | **+0.010** |
+| pc_area_gt_0p5 | 0.336 | 0.252 | 0.222 | -0.155 |
 
 Low Spearman values reflect compressed score distributions at the set-piece moment (both pipeline and GT cluster near their respective means), which reduces rank variation and makes Spearman unreliable relative to Pearson.
 
@@ -368,7 +370,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 
 *Box inversion* (`pc_in_box`): This is the largest error and the most structurally distinct. GT shows the defending team controlling the penalty box (mean 0.316, well below 0.5), which is correct — at a corner, defenders pack the box. The pipeline estimates attacker control (0.539), a sign inversion. KMeans on per-track mean HSV fails when both teams are densely packed in the small penalty-area crop: jersey colours are harder to separate under broadcast lighting at this scale, and cluster centroids can interchange between teams.
 
-*Calibrated* (`pc_in_third`): delta = +0.000, histogram overlap = 0.896. Attacking-third analysis is unaffected by box crowding and is less sensitive to total player count than global metrics. This is the most reliable operational metric from this pipeline.
+*Calibrated* (`pc_in_third`): delta = +0.010, histogram overlap = 0.903. Attacking-third analysis is unaffected by box crowding and is less sensitive to total player count than global metrics. This is the most reliable operational metric from this pipeline.
 
 ### 6.6 Phase 6: Deployment
 
@@ -405,19 +407,19 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 
 ### 7.1 What the pipeline gets right
 
-`pc_in_third` is the most reliable metric: bias = +0.000, histogram overlap = 0.896. Attacking-third analysis integrates over a large pitch zone (one third of the field, ~35 m × 68 m), diluting localised detection errors and team-assignment noise. It is the appropriate primary metric for comparing set-piece spatial dominance across clips.
+`pc_in_third` is the most reliable metric: bias = +0.010, histogram overlap = 0.903. Attacking-third analysis integrates over a large pitch zone (one third of the field, ~35 m × 68 m), diluting localised detection errors and team-assignment noise. It is the appropriate primary metric for comparing set-piece spatial dominance across clips.
 
 `pc_at_ball` — control at the ball location — is well-preserved: bias = -0.051, histogram overlap = 0.804, Pearson r = 0.511. The pipeline reliably identifies that the executing team has spatial dominance at the point of delivery, the most operationally meaningful signal.
 
 ### 7.2 What the pipeline gets wrong: the box inversion
 
-`pc_in_box` has the largest error: bias = +0.223, histogram overlap = 0.475. GT shows defenders controlling the penalty box (mean 0.316), which is correct — at a corner, the defending team packs the box. The pipeline estimates attacker control (mean 0.539), a full sign inversion. The cause is KMeans team assignment failure in crowded penalty-area crops: when both teams are tightly packed near the goal, per-track mean HSV features become harder to separate, and cluster centroids can interchange between teams. This is a structural limitation of colour-based team assignment, not a detection recall issue.
+`pc_in_box` has the largest error: bias = +0.216, histogram overlap = 0.499. GT shows defenders controlling the penalty box (mean 0.316), which is correct — at a corner, the defending team packs the box. The pipeline estimates attacker control (mean 0.539), a full sign inversion. The cause is KMeans team assignment failure in crowded penalty-area crops: when both teams are tightly packed near the goal, per-track mean HSV features become harder to separate, and cluster centroids can interchange between teams. This is a structural limitation of colour-based team assignment, not a detection recall issue.
 
 **Practical implication:** `pc_in_box` should not be used as a reliable signal from this pipeline in its current form.
 
 ### 7.3 What the pipeline underestimates
 
-Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18. The pipeline detects 15.99 mean players per frame vs GT 18.69, with a larger shortfall on defenders (7.41 vs GT 9.13) than on attackers (8.58 vs GT 9.56). In the Shaw model, additional defenders compress attacking control uniformly across the surface; the asymmetric recall gap means attacking control is underestimated. This is a detection completeness problem, predictable from the model's mathematics.
+Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.15–0.16. The pipeline detects 15.99 mean players per frame vs GT 18.69, with a larger shortfall on defenders (7.41 vs GT 9.13) than on attackers (8.58 vs GT 9.56). In the Shaw model, additional defenders compress attacking control uniformly across the surface; the asymmetric recall gap means attacking control is underestimated. This is a detection completeness problem, predictable from the model's mathematics.
 
 ### 7.4 Why no metrics pass strict KS
 
@@ -470,7 +472,7 @@ Based on the findings, the highest-leverage next actions in priority order are:
 
 ### 8.1 Final Reflections
 
-This project set out to answer a single practical question: can a broadcast-video-only pipeline produce Pitch Control estimates that are distributionally comparable to ground-truth annotation-derived estimates, for set-piece frames, on consumer hardware? The answer is conditional but affirmative: yes, for `pc_in_third` (bias ≈ 0, overlap = 0.896) and with useful signal on `pc_at_ball` (bias = -0.051, overlap = 0.804).
+This project set out to answer a single practical question: can a broadcast-video-only pipeline produce Pitch Control estimates that are distributionally comparable to ground-truth annotation-derived estimates, for set-piece frames, on consumer hardware? The answer is conditional but affirmative: yes, for `pc_in_third` (bias = +0.010, overlap = 0.903) and with useful signal on `pc_at_ball` (bias = -0.051, overlap = 0.804).
 
 The development process surfaced a significant data-quality issue in SoccerNet GSR — the `action_position` field is a global broadcast frame number, not a clip-local index, causing the entire pipeline to operate on end-of-clip open-play frames rather than set-piece formations until the bug was identified and fixed. This mid-project discovery and correction illustrates the importance of data validation as an active rather than passive phase of CRISP-DM, and is documented here both as a methodological lesson and as a contribution to future users of this dataset.
 
@@ -478,7 +480,7 @@ The most surprising finding is the clean three-way partition of error modes: one
 
 ### 8.2 Core Conclusions
 
-1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals, within this 31-clip cohort of SoccerNet GSR footage. `pc_in_third`: bias ≈ 0, overlap = 0.896. `pc_at_ball`: bias = -0.051, overlap = 0.804.
+1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals, within this 31-clip cohort of SoccerNet GSR footage. `pc_in_third`: bias = +0.010, overlap = 0.903. `pc_at_ball`: bias = -0.051, overlap = 0.804.
 2. **TVCalib autonomous calibration** enables fully autonomous camera-to-pitch projection: 33/33 clips processed, zero homography failures, no GT pitch-line annotations consumed.
 3. **Bias is structural and attributable by metric:** global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated due to asymmetric detector recall (more defenders missed than attackers); `pc_in_box` is sign-inverted due to KMeans team-assignment failure in crowded penalty areas; `pc_in_third` is unaffected by both failure modes.
 4. **ByteTrack persistent IDs** enable single-pass team assignment per clip with clean label coverage (zero discarded tracks), eliminating per-frame label instability.
@@ -597,7 +599,7 @@ soccernet-setpiece-vision/
 |---|---|---|
 | Detector | Soccana (YOLOv11n, HuggingFace) | run_soccana_tvcalib.py |
 | Confidence threshold | 0.40 | _pipeline_core.py |
-| Player class | 0 | run_soccana_tvcalib.py |
+| Detection classes | 0 (Player), 2 (Referee) | run_soccana_tvcalib.py |
 | Tracker | ByteTrack | _pipeline_core.py |
 | KMeans k | 3 (drop smallest if <15% or referee-like) | _pipeline_core.py |
 | Calibration | TVCalib | homographies_tvcalib.parquet |
