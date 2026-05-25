@@ -45,7 +45,9 @@ def main():
                 continue
             n_clips += 1
             n_frames = len(labels["images"])
-            centre = max(1, min(int(info.get("action_position", 375)), n_frames))
+            # action_position is a global broadcast frame number, not clip-local (1–750).
+            # Clips start at the set-piece; use the first 2*FRAME_WINDOW+1 frames.
+            centre = min(FRAME_WINDOW + 1, n_frames)
             lo = max(1, centre - FRAME_WINDOW)
             hi = min(n_frames, centre + FRAME_WINDOW)
             # build image_id index for this clip
@@ -71,12 +73,17 @@ def main():
                     yc = bp.get("y_bottom_middle")
                     if xc is None or yc is None:
                         continue
+                    x_m = float(xc) + PITCH_L / 2
+                    y_m = float(yc) + PITCH_W / 2
+                    _M = 2.0
+                    if not (-_M <= x_m <= PITCH_L + _M and -_M <= y_m <= PITCH_W + _M):
+                        continue
                     rows.append({
                         "split": split, "clip_id": clip_dir.name,
                         "action_class": info["action_class"],
                         "frame_idx": frame_idx,
-                        "x_m": float(xc) + PITCH_L / 2,
-                        "y_m": float(yc) + PITCH_W / 2,
+                        "x_m": x_m,
+                        "y_m": y_m,
                         "team": a["attributes"].get("team"),
                         "role": a["attributes"].get("role"),
                         "track_id": a.get("track_id"),

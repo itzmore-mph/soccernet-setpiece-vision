@@ -1,7 +1,7 @@
 """Batch TVCalib: compute autonomous homographies for all set-piece frames.
 
 Discovers all SoccerNet GSR clips with action_class in {Corner, Direct free-kick},
-stages a ±15 frame window around action_position into a temp dir, runs TVCalib
+stages the first ±15 frames (frames 1–31) of each clip into a temp dir, runs TVCalib
 once over the lot, writes outputs/homographies_tvcalib.parquet keyed
 (split, clip_id, frame_idx).
 
@@ -66,7 +66,9 @@ def discover_clips() -> list[dict]:
             if info.get("action_class") not in TARGET_ACTIONS:
                 continue
             n_frames = len(labels.get("images", []))
-            centre = max(1, min(int(info.get("action_position", 375)), n_frames))
+            # action_position is a global broadcast frame number, not clip-local (1–750).
+            # Clips start at the set-piece; use the first 2*FRAME_WINDOW+1 frames.
+            centre = min(FRAME_WINDOW + 1, n_frames)
             lo = max(1, centre - FRAME_WINDOW)
             hi = min(n_frames, centre + FRAME_WINDOW)
             rows.append({

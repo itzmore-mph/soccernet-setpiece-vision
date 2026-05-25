@@ -120,15 +120,25 @@ jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_underst
 
 Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`.
 
-### 5. Run the pipeline (Soccana + TVCalib)
+### 5. Compute TVCalib homographies
+
+```bash
+# Stages frames 1–31 per clip into /tmp, runs TVCalib (~15 min, SSD required)
+# Requires TVCalib set up in ../tvcalib/ — see scripts/run_tvcalib_batch.py docstring
+python scripts/run_tvcalib_batch.py
+```
+
+Produces: `outputs/homographies_tvcalib.parquet`. Skip this step if you want to use the committed pre-computed homographies.
+
+### 6. Run the pipeline (Soccana + TVCalib)
 
 ```bash
 # Soccana detector + ByteTrack + team assignment (~30 min, SSD required)
 python scripts/run_soccana_tvcalib.py
 
-# Cache ball positions and GT detections from SSD
-python scripts/dump_ball_positions.py
+# GT detections must run before ball positions (ball positions reads both parquets)
 python scripts/dump_gt_setpieces.py
+python scripts/dump_ball_positions.py
 
 # Compute pitch control surfaces (SSD-free from here)
 python scripts/run_pc_soccana_tvcalib.py
@@ -138,19 +148,19 @@ python scripts/run_pc_gt_full.py
 python scripts/ks_table_tvcalib.py
 ```
 
-### 6. Run notebook 02 — Pitch Control
+### 7. Run notebook 02 — Pitch Control
 
 ```bash
 jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
 ```
 
-### 7. Run notebook 03 — Evaluation & Validation
+### 8. Run notebook 03 — Evaluation & Validation
 
 ```bash
 jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
 ```
 
-### 8. Run notebook 04 — Visualizations
+### 9. Run notebook 04 — Visualizations
 
 ```bash
 jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
@@ -158,7 +168,7 @@ jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --in
 
 Requires SSD (reads broadcast frames for overlays).
 
-### 9. (Optional) Render annotated broadcast clips
+### 10. (Optional) Render annotated broadcast clips
 
 ```bash
 python scripts/render_annotated_clips.py

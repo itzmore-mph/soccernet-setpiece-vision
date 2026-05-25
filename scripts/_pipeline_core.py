@@ -229,7 +229,9 @@ def run_clip(
         return [], f"labels: {e}"
 
     n_frames = len(labels_json["images"])
-    centre = max(1, min(int(clip["action_position"]), n_frames))
+    # action_position in SoccerNet GSR is a global broadcast frame number (>>750),
+    # not a clip-local index. Clips are numbered 1–750 with the set-piece at frame 1.
+    centre = min(FRAME_WINDOW + 1, n_frames)
     lo = max(1, centre - FRAME_WINDOW)
     hi = min(n_frames, centre + FRAME_WINDOW)
 

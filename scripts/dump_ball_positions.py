@@ -74,6 +74,11 @@ def main() -> None:
                 ball_pos = ann_ball_cache.get(cache_key, {}).get(image_id)
                 if ball_pos is not None:
                     bx, by = ball_pos
+        # Reject physically impossible coordinates (some GSR annotations are corrupted).
+        # Allow 2m margin: corner-arc balls can be annotated up to ~1m outside the pitch line.
+        _M = 2.0
+        if not (-_M <= bx <= PITCH_L + _M and -_M <= by <= PITCH_W + _M):
+            bx, by = np.nan, np.nan
         rows.append({**k.to_dict(), "ball_x_m": bx, "ball_y_m": by})
 
     df = pd.DataFrame(rows)
