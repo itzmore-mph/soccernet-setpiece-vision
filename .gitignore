@@ -47,3 +47,4 @@ outputs/figures/overlay/
 outputs/figures/*.mp4
 !outputs/figures/video_*.mp4
 report.pdf
+report.docx
