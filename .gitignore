@@ -21,6 +21,9 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.kiro/
+.CLAUDE.md
+.claude/
 
 # Conda / venv (env lives in py311-dev outside repo)
 .venv/
@@ -37,8 +40,10 @@ example/
 *.onnx
 
 # Outputs: keep parquet + figures (small, reproducible-from-notebooks)
-# Large video files excluded from repo.
+# Diagnostic per-clip videos excluded (33 clips each, ~GB total).
+# The 2 representative video_*.mp4 files are committed intentionally.
 outputs/figures/annotated/
 outputs/figures/overlay/
 outputs/figures/*.mp4
+!outputs/figures/video_*.mp4
 report.pdf
