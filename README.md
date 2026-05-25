@@ -42,7 +42,7 @@ soccernet-setpiece-vision/
 │   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
 │   ├── run_pc_gt_full.py         # Pitch control (GT reference)
 │   ├── ks_table_tvcalib.py       # Validation table + figure
-│   ├── render_annotated_clips.py # Team-coloured bbox overlays to MP4
+│   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
 ├── outputs/                      # Parquet outputs + figures/
 ├── docs/                         # Project proposal documents

@@ -1,8 +1,7 @@
 """Render detection-style annotated broadcast clips.
 
-Shows bounding boxes with team-colored labels, confidence scores, and track IDs
-— similar to raw YOLO output but with team assignment applied. This visualizes
-the detection + tracking + team assignment pipeline stages before pitch control.
+Shows bounding boxes with team-colored labels, confidence scores, and track IDs.
+Players colored by KMeans team assignment; referees in orange (Soccana class 2).
 
 Reads detections_soccana_tvcalib.parquet, loads broadcast frames from the SSD,
 and writes one MP4 per clip to outputs/figures/annotated/.
@@ -26,12 +25,13 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures" / "annotated"
 GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
 
-# Team colors (BGR)
+# Colors (BGR)
 TEAM_COLORS = {
     0: (220, 120, 20),   # blue team
     1: (20, 40, 220),    # red team
     -1: (100, 100, 100), # unassigned
 }
+REFEREE_COLOR = (30, 130, 255)  # orange
 TEAM_NAMES = {0: "Team A", 1: "Team B", -1: "?"}
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 FPS = 8
@@ -51,24 +51,22 @@ def draw_detection_box(
     team: int,
     track_id: int,
     conf: float,
+    is_referee: bool = False,
 ) -> None:
     """Draw a YOLO-style detection box with label background."""
-    color = TEAM_COLORS.get(team, TEAM_COLORS[-1])
-    thickness = 2
+    if is_referee:
+        color = REFEREE_COLOR
+        label = f"Referee {conf:.2f}"
+    else:
+        color = TEAM_COLORS.get(team, TEAM_COLORS[-1])
+        label = f"{TEAM_NAMES[team]} #{track_id} {conf:.2f}"
 
-    # Draw bounding box
-    cv2.rectangle(frame, (x1, y1), (x2, y2), color, thickness)
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
 
-    # Label text
-    label = f"{TEAM_NAMES[team]} #{track_id} {conf:.2f}"
-
-    # Label background
     (tw, th), baseline = cv2.getTextSize(label, FONT, 0.5, 1)
     label_y1 = max(y1 - th - 8, 0)
     label_y2 = y1
     cv2.rectangle(frame, (x1, label_y1), (x1 + tw + 6, label_y2), color, -1)
-
-    # Label text (white on colored background)
     cv2.putText(frame, label, (x1 + 3, label_y2 - 4),
                 FONT, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
@@ -80,25 +78,25 @@ def draw_info_bar(
     frame_idx: int,
     n_team_a: int,
     n_team_b: int,
+    n_refs: int = 0,
 ) -> None:
     """Draw info bar at the top of the frame."""
     h, w = frame.shape[:2]
 
-    # Semi-transparent black bar at top
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (w, 36), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
 
-    # Info text
-    info = f"{clip_id} | {action_class} | frame {frame_idx} | Team A: {n_team_a} | Team B: {n_team_b}"
+    info = f"{clip_id} | {action_class} | frame {frame_idx} | A: {n_team_a}  B: {n_team_b}  Ref: {n_refs}"
     cv2.putText(frame, info, (10, 25), FONT, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
 
-    # Team color legend
-    legend_x = w - 220
+    legend_x = w - 310
     cv2.rectangle(frame, (legend_x, 8), (legend_x + 15, 23), TEAM_COLORS[0], -1)
     cv2.putText(frame, "Team A", (legend_x + 20, 22), FONT, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
     cv2.rectangle(frame, (legend_x + 90, 8), (legend_x + 105, 23), TEAM_COLORS[1], -1)
     cv2.putText(frame, "Team B", (legend_x + 110, 22), FONT, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.rectangle(frame, (legend_x + 180, 8), (legend_x + 195, 23), REFEREE_COLOR, -1)
+    cv2.putText(frame, "Ref", (legend_x + 200, 22), FONT, 0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
 
 def render_clip(
@@ -141,24 +139,28 @@ def render_clip(
         if frame is None:
             continue
 
-        n_a, n_b = 0, 0
+        n_a, n_b, n_refs = 0, 0, 0
         if fi in frame_dets.groups:
             rows = frame_dets.get_group(fi)
+            has_ref_col = "is_referee" in rows.columns
             for _, row in rows.iterrows():
                 team = int(row["team_kmeans"])
                 x1, y1 = int(row["x1_px"]), int(row["y1_px"])
                 x2, y2 = int(row["x2_px"]), int(row["y2_px"])
                 conf = float(row["conf"]) if "conf" in row.index else 0.0
                 track_id = int(row["track_id"])
+                is_ref = bool(row["is_referee"]) if has_ref_col else False
 
-                draw_detection_box(frame, x1, y1, x2, y2, team, track_id, conf)
+                draw_detection_box(frame, x1, y1, x2, y2, team, track_id, conf, is_ref)
 
-                if team == 0:
+                if is_ref:
+                    n_refs += 1
+                elif team == 0:
                     n_a += 1
                 elif team == 1:
                     n_b += 1
 
-        draw_info_bar(frame, clip_id, action_class, fi, n_a, n_b)
+        draw_info_bar(frame, clip_id, action_class, fi, n_a, n_b, n_refs)
 
         writer.write(frame)
         written += 1

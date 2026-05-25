@@ -33,7 +33,7 @@ Optical player tracking powers modern tactical analysis but remains commercially
 - `pc_at_ball` (control at ball location): bias = -0.051, histogram overlap = 0.804, per-frame Pearson r = 0.511.
 - `pc_in_third` is the most reliable metric: bias ≈ 0 (+0.000), histogram overlap = 0.896.
 - `pc_in_box` has the largest systematic error (+0.223 bias): KMeans team assignment degrades in crowded penalty areas during corners, inverting the team label in that zone for a subset of frames.
-- Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18: pipeline detects fewer players per frame (mean 15.87 vs GT 18.69) with a larger shortfall on the defending team, compressing attacking control across the surface under the Shaw model.
+- Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18: pipeline detects fewer players per frame (mean 15.99 vs GT 18.69) with a larger shortfall on the defending team, compressing attacking control across the surface under the Shaw model.
 - Full pipeline runs on a standard consumer laptop (~30 min on Apple Silicon MPS, longer on CPU-only hardware), no cloud dependency.
 
 **Impact.** A broadcast-only Pitch Control pipeline that produces distributionally honest estimates of the most operationally meaningful set-piece signal, deployable by any club with broadcast video access and a laptop.
@@ -302,18 +302,18 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 ### 6.3 Phase 3: Data Preparation
 
 **Pipeline track (run_soccana_tvcalib.py):**
-1. Soccana detection at confidence 0.40, class 0 (Player).
-2. ByteTrack persistent ID assignment across frames.
-3. Per-track mean HSV with KMeans (k=3, smallest-cluster drop if <15% of clip population or referee-like HSV centroid, re-fit k=2). All detections receive a team label (0 or 1); zero tracks are discarded with label -1, indicating clean assignment across all 33 clips.
-4. TVCalib homography: pixel foot-point to metric pitch coordinates.
-5. Output: 16,090 detection rows across 33 clips.
+1. Soccana detection at confidence 0.40, classes 0 (Player) and 2 (Referee) in a single forward pass.
+2. ByteTrack persistent ID assignment across frames for all detected objects.
+3. Per-track mean HSV with KMeans (k=3, smallest-cluster drop if <15% of clip population or referee-like HSV centroid, re-fit k=2) applied to player tracks only. Player detections receive a team label (0 or 1); referee detections are assigned `team=-1` directly and excluded from pitch control computation.
+4. TVCalib homography: pixel foot-point to metric pitch coordinates for both players and referees.
+5. Output: 17,260 detection rows across 33 clips (16,209 player rows + 1,051 referee rows).
 
 **GT track (dump_gt_setpieces.py):**
 - SoccerNet GSR bbox_pitch annotations parsed directly.
 - Centred coordinates converted to top-left origin (0–105, 0–68). Annotations with coordinates outside ±2 m of pitch boundaries are discarded (handles corner-arc annotation noise and the small number of corrupted GT entries with physically impossible coordinates).
 - Output: 18,539 rows across 32 clips (SNGS-125 has no GT player annotations in frames 1–31).
 
-**Detection shortfall:** Pipeline produces 2,449 fewer rows than GT (13.2% shortfall). Mean players per frame: pipeline 15.87 vs GT 18.69. The defending-team shortfall is larger (pipeline 7.35 vs GT 9.13 per frame) than the attacking-team shortfall (pipeline 8.52 vs GT 9.56), consistent with defenders clustering in occluded, crowded positions near the goal. This asymmetric shortfall drives the directional bias on global metrics under the Shaw model.
+**Detection shortfall:** Pipeline produces 2,330 fewer rows than GT (12.6% shortfall). Mean players per frame: pipeline 15.99 vs GT 18.69. The defending-team shortfall is larger (pipeline 7.41 vs GT 9.13 per frame) than the attacking-team shortfall (pipeline 8.58 vs GT 9.56), consistent with defenders clustering in occluded, crowded positions near the goal. This asymmetric shortfall drives the directional bias on global metrics under the Shaw model.
 
 **Ball positions (dump_ball_positions.py):** 1,023 frame positions parsed from SoccerNet GSR GT annotations (bbox_pitch, category_id=4). 949/1,023 frames have valid ball coordinates (within ±2 m of pitch boundaries). SNGS-125 and SNGS-145 have no ball annotation in any frame within the window; these 2 clips are excluded from the PC computation, reducing the effective validation set from 33 to 31 clips.
 
@@ -364,7 +364,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 
 **Bias diagnosis:** The five metrics divide into three groups by error type.
 
-*Global underestimation* (`pc_mean`, `pc_area_gt_0p5`, `pc_at_ball`): GT records 18.69 players per frame vs pipeline 15.87 (15% shortfall), with the defending team more under-detected (pipeline 7.35 vs GT 9.13) than the attacking team (8.52 vs GT 9.56). Fewer defenders shift the Shaw surface toward attacker control; GT, with more defenders, correctly computes stronger defensive compression. The pipeline therefore underestimates the degree to which defenders constrain attacking space.
+*Global underestimation* (`pc_mean`, `pc_area_gt_0p5`, `pc_at_ball`): GT records 18.69 players per frame vs pipeline 15.99 (14.4% shortfall), with the defending team more under-detected (pipeline 7.41 vs GT 9.13) than the attacking team (8.58 vs GT 9.56). Fewer defenders shift the Shaw surface toward attacker control; GT, with more defenders, correctly computes stronger defensive compression. The pipeline therefore underestimates the degree to which defenders constrain attacking space.
 
 *Box inversion* (`pc_in_box`): This is the largest error and the most structurally distinct. GT shows the defending team controlling the penalty box (mean 0.316, well below 0.5), which is correct — at a corner, defenders pack the box. The pipeline estimates attacker control (0.539), a sign inversion. KMeans on per-track mean HSV fails when both teams are densely packed in the small penalty-area crop: jersey colours are harder to separate under broadcast lighting at this scale, and cluster centroids can interchange between teams.
 
@@ -385,7 +385,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 | Deliverable | Description |
 |---|---|
 | `homographies_tvcalib.parquet` | 1,023 TVCalib homographies (33 clips × 31 frames) |
-| `detections_soccana_tvcalib.parquet` | 16,090 player detection rows (pipeline) |
+| `detections_soccana_tvcalib.parquet` | 17,260 rows: 16,209 player + 1,051 referee (pipeline) |
 | `detections_gt_full.parquet` | 18,539 GT player annotation rows |
 | `ball_positions.parquet` | 1,023 frame ball positions (949 valid) |
 | `pitch_control_soccana_tvcalib.parquet` | 940 pipeline PC frames (31 clips) |
@@ -417,7 +417,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 
 ### 7.3 What the pipeline underestimates
 
-Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18. The pipeline detects 15.87 mean players per frame vs GT 18.69, with a larger shortfall on defenders (7.35 vs GT 9.13) than on attackers (8.52 vs GT 9.56). In the Shaw model, additional defenders compress attacking control uniformly across the surface; the asymmetric recall gap means attacking control is underestimated. This is a detection completeness problem, predictable from the model's mathematics.
+Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.17–0.18. The pipeline detects 15.99 mean players per frame vs GT 18.69, with a larger shortfall on defenders (7.41 vs GT 9.13) than on attackers (8.58 vs GT 9.56). In the Shaw model, additional defenders compress attacking control uniformly across the surface; the asymmetric recall gap means attacking control is underestimated. This is a detection completeness problem, predictable from the model's mathematics.
 
 ### 7.4 Why no metrics pass strict KS
 
@@ -575,12 +575,12 @@ soccernet-setpiece-vision/
         ball_positions.parquet
         pitch_control_soccana_tvcalib.parquet
         pitch_control_gt_full.parquet
-        pitch_control.parquet
         validation_summary_tvcalib.parquet
         validation_paired.parquet
         setpieces.parquet
         gt_spatial_benchmarks.parquet
         figures/
+            11_multiclass_detections.png        ← Soccana Player/Ball/Referee detection (methods figure)
             still_corner_SNGS-116.png          ← three-panel thesis figure (corner)
             still_direct_free-kick_SNGS-122.png ← three-panel thesis figure (free kick)
             anim_corner_SNGS-116.gif            ← animated 31-frame PC overlay

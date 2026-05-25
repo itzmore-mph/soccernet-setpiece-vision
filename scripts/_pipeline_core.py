@@ -75,8 +75,10 @@ def load_tvcalib_lookup(outputs_dir: Path) -> dict[tuple[str, str, int], np.ndar
 
 def jersey_hsv(image_bgr: np.ndarray, bbox_xywh: np.ndarray) -> np.ndarray:
     x, y, w, h = bbox_xywh
-    x1 = int(x + 0.25 * w); x2 = int(x + 0.75 * w)
-    y1 = int(y + 0.15 * h); y2 = int(y + 0.45 * h)
+    x1 = int(x + 0.25 * w)
+    x2 = int(x + 0.75 * w)
+    y1 = int(y + 0.15 * h)
+    y2 = int(y + 0.45 * h)
     x1, y1 = max(0, x1), max(0, y1)
     x2 = min(image_bgr.shape[1] - 1, x2)
     y2 = min(image_bgr.shape[0] - 1, y2)
@@ -123,27 +125,43 @@ def assign_teams_kmeans(hsv_features: np.ndarray, k: int = 3, drop_frac: float =
     return labels
 
 
-def track_players(yolo, image_bgr: np.ndarray, player_class: int = 0) -> np.ndarray:
+def track_frame(
+    yolo, image_bgr: np.ndarray, player_class: int = 0, referee_class: int = 2
+) -> tuple[np.ndarray, np.ndarray]:
+    """Single tracking pass for players + referees.
+
+    One yolo.track() call per frame keeps ByteTrack state intact.
+    Returns:
+        player_dets  — Nx6 [x, y, w, h, conf, track_id]
+        referee_dets — Mx5 [x, y, w, h, conf]
+    """
     res = yolo.track(
         source=image_bgr,
         conf=YOLO_CONF,
-        classes=[player_class],
+        classes=[player_class, referee_class],
         tracker="bytetrack.yaml",
         persist=True,
         device=DEVICE,
         verbose=False,
     )[0]
     if res.boxes is None or len(res.boxes) == 0:
-        return np.zeros((0, 6), dtype=np.float32)
+        return np.zeros((0, 6), dtype=np.float32), np.zeros((0, 5), dtype=np.float32)
+
     xyxy = res.boxes.xyxy.cpu().numpy()
     conf = res.boxes.conf.cpu().numpy()
+    cls = res.boxes.cls.cpu().numpy().astype(int)
     ids = (res.boxes.id.cpu().numpy().astype(int)
            if res.boxes.id is not None
            else np.full(len(conf), -1, dtype=int))
-    x = xyxy[:, 0]; y = xyxy[:, 1]
+    x = xyxy[:, 0]
+    y = xyxy[:, 1]
     w = xyxy[:, 2] - xyxy[:, 0]
     h = xyxy[:, 3] - xyxy[:, 1]
-    return np.column_stack([x, y, w, h, conf, ids]).astype(np.float32)
+    all_dets = np.column_stack([x, y, w, h, conf, ids]).astype(np.float32)
+
+    player_dets = all_dets[cls == player_class]
+    referee_dets = all_dets[cls == referee_class, :5]
+    return player_dets, referee_dets
 
 
 def project_points(H: np.ndarray, pts_xy: np.ndarray) -> np.ndarray:
@@ -182,32 +200,68 @@ def build_detection_rows(
 ) -> list[dict]:
     rows = []
     for fd in frame_detections:
-        dets = fd["dets"]; H = fd["H"]; hsv_batch = fd["hsv_batch"]; fi = fd["frame_idx"]
-        feet = np.column_stack([dets[:, 0] + dets[:, 2] / 2, dets[:, 1] + dets[:, 3]])
-        pitch_xy = project_points(H, feet)
-        for k in range(len(dets)):
-            tid = int(dets[k, 5])
-            team_lbl = track_team_map.get(tid, -1)
-            if team_lbl < 0:
-                continue
-            x_m, y_m = float(pitch_xy[k, 0]), float(pitch_xy[k, 1])
-            if not (0 <= x_m <= PITCH_LENGTH_M and 0 <= y_m <= PITCH_WIDTH_M):
-                continue
-            rows.append({
-                "split": clip["split"], "clip_id": clip["clip_id"],
-                "action_class": clip["action_class"], "frame_idx": fi,
-                "track_id": tid,
-                "x_m": x_m, "y_m": y_m,
-                "team_kmeans": team_lbl,
-                "conf": float(dets[k, 4]),
-                "hsv_h": float(hsv_batch[k, 0]),
-                "hsv_s": float(hsv_batch[k, 1]),
-                "hsv_v": float(hsv_batch[k, 2]),
-                "x1_px": float(dets[k, 0]),
-                "y1_px": float(dets[k, 1]),
-                "x2_px": float(dets[k, 0] + dets[k, 2]),
-                "y2_px": float(dets[k, 1] + dets[k, 3]),
-            })
+        H = fd["H"]
+        fi = fd["frame_idx"]
+
+        # --- players (tracked, participate in pitch control) ---
+        dets = fd["dets"]
+        hsv_batch = fd["hsv_batch"]
+        if len(dets) > 0:
+            feet = np.column_stack([dets[:, 0] + dets[:, 2] / 2, dets[:, 1] + dets[:, 3]])
+            pitch_xy = project_points(H, feet)
+            for k in range(len(dets)):
+                tid = int(dets[k, 5])
+                team_lbl = track_team_map.get(tid, -1)
+                if team_lbl < 0:
+                    continue
+                x_m, y_m = float(pitch_xy[k, 0]), float(pitch_xy[k, 1])
+                if not (0 <= x_m <= PITCH_LENGTH_M and 0 <= y_m <= PITCH_WIDTH_M):
+                    continue
+                rows.append({
+                    "split": clip["split"], "clip_id": clip["clip_id"],
+                    "action_class": clip["action_class"], "frame_idx": fi,
+                    "track_id": tid,
+                    "x_m": x_m, "y_m": y_m,
+                    "team_kmeans": team_lbl,
+                    "is_referee": False,
+                    "conf": float(dets[k, 4]),
+                    "hsv_h": float(hsv_batch[k, 0]),
+                    "hsv_s": float(hsv_batch[k, 1]),
+                    "hsv_v": float(hsv_batch[k, 2]),
+                    "x1_px": float(dets[k, 0]),
+                    "y1_px": float(dets[k, 1]),
+                    "x2_px": float(dets[k, 0] + dets[k, 2]),
+                    "y2_px": float(dets[k, 1] + dets[k, 3]),
+                })
+
+        # --- referees (YOLO class 2, excluded from pitch control) ---
+        ref_dets = fd.get("ref_dets")
+        if ref_dets is not None and len(ref_dets) > 0:
+            ref_feet = np.column_stack([
+                ref_dets[:, 0] + ref_dets[:, 2] / 2,
+                ref_dets[:, 1] + ref_dets[:, 3],
+            ])
+            ref_pitch_xy = project_points(H, ref_feet)
+            for k in range(len(ref_dets)):
+                x_m, y_m = float(ref_pitch_xy[k, 0]), float(ref_pitch_xy[k, 1])
+                if not (0 <= x_m <= PITCH_LENGTH_M and 0 <= y_m <= PITCH_WIDTH_M):
+                    continue
+                rows.append({
+                    "split": clip["split"], "clip_id": clip["clip_id"],
+                    "action_class": clip["action_class"], "frame_idx": fi,
+                    "track_id": -2,
+                    "x_m": x_m, "y_m": y_m,
+                    "team_kmeans": -1,
+                    "is_referee": True,
+                    "conf": float(ref_dets[k, 4]),
+                    "hsv_h": float("nan"),
+                    "hsv_s": float("nan"),
+                    "hsv_v": float("nan"),
+                    "x1_px": float(ref_dets[k, 0]),
+                    "y1_px": float(ref_dets[k, 1]),
+                    "x2_px": float(ref_dets[k, 0] + ref_dets[k, 2]),
+                    "y2_px": float(ref_dets[k, 1] + ref_dets[k, 3]),
+                })
     return rows
 
 
@@ -252,11 +306,11 @@ def run_clip(
         H = H_lookup.get((clip["split"], clip["clip_id"], frame_idx))
         if H is None:
             n_homog_fail += 1
-            track_players(yolo, frame, player_class)
+            track_frame(yolo, frame, player_class)  # keep ByteTrack warm
             continue
 
-        dets = track_players(yolo, frame, player_class)
-        if len(dets) == 0:
+        dets, ref_dets = track_frame(yolo, frame, player_class)
+        if len(dets) == 0 and len(ref_dets) == 0:
             continue
         hsv_batch = np.array([jersey_hsv(frame, dets[k, :4]) for k in range(len(dets))])
         for k in range(len(dets)):
@@ -268,6 +322,7 @@ def run_clip(
         frame_detections.append({
             "frame_idx": frame_idx, "image_id": image_id,
             "H": H, "dets": dets, "hsv_batch": hsv_batch,
+            "ref_dets": ref_dets,
         })
 
     if not frame_detections:
