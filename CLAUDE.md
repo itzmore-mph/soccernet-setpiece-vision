@@ -60,7 +60,7 @@ detections_gt_full.parquet ──→ run_pc_gt_full.py         → pitch_control
                                                     ks_table_tvcalib.py → validation_summary_tvcalib.parquet
 ```
 
-All intermediate state lives in `outputs/` as Parquet. `homographies_tvcalib.parquet` is committed (TVCalib is a sibling repo, not a Python package — see `scripts/run_tvcalib_batch.py` docstring for rebuild instructions).
+All intermediate state lives in `outputs/` as Parquet. `homographies_tvcalib.parquet` is committed — all downstream scripts work without TVCalib. To regenerate homographies, see the **TVCalib Setup** section in `README.md` (clone, venv, two PyTorch 2.x patches, checkpoint download).
 
 ## Coordinate Systems
 

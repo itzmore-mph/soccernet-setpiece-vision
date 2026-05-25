@@ -60,7 +60,72 @@ soccernet-setpiece-vision/
 - **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
 - **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
-**Note on homographies:** `outputs/homographies_tvcalib.parquet` contains pre-computed camera calibration matrices for all 33 clips, produced by [TVCalib](https://github.com/MM4SPA/tvcalib) (Theiner & Ewerth, WACV 2023). This file is included in the project folder and used directly by the pipeline. The script `scripts/run_tvcalib_batch.py` documents exactly how it was produced — regenerating it requires the TVCalib tool set up in a sibling directory (see the script's docstring for full setup instructions).
+**Note on homographies:** `outputs/homographies_tvcalib.parquet` is committed and contains pre-computed camera calibration matrices for all 33 clips (33 clips × 31 frames = 1,023 homographies). All downstream scripts read directly from this file. **You do not need TVCalib to run the pipeline or reproduce the analysis** — only to regenerate the homographies from scratch.
+
+---
+
+## TVCalib Setup (only needed to regenerate homographies)
+
+TVCalib runs in a separate sibling directory with its own Python environment. Expected layout:
+
+```
+parent-dir/
+├── soccernet-setpiece-vision/   ← this repo
+└── tvcalib/                     ← TVCalib repo
+```
+
+### 1. Clone TVCalib
+
+```bash
+cd ..
+git clone https://github.com/MM4SPA/tvcalib
+```
+
+### 2. Create TVCalib environment
+
+```bash
+cd tvcalib
+python3.11 -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
+pip install torch==2.1.* torchvision kornia==0.8.2 pytorch-lightning==2.6.1
+pip install SoccerNet==0.1.62 opencv-python numpy
+```
+
+### 3. Apply PyTorch 2.x compatibility patches
+
+Two small patches are required for TVCalib to run with PyTorch 2.x:
+
+**`tvcalib/tvcalib/sncalib_dataset.py` — line 13:**
+```python
+# Replace:
+from torch._six import string_classes
+# With:
+string_classes = (str, bytes)
+```
+
+**`tvcalib/run_inference.py` — line 89:**
+```python
+# Replace:
+checkpoint = torch.load(path)
+# With:
+checkpoint = torch.load(path, weights_only=False)
+```
+
+### 4. Download segmentation checkpoint
+
+Download `train_59.pt` from the [TVCalib releases](https://github.com/MM4SPA/tvcalib/releases) and place it at:
+
+```
+tvcalib/data/segment_localization/train_59.pt
+```
+
+### 5. Verify setup
+
+```bash
+# From soccernet-setpiece-vision/
+python scripts/run_tvcalib_batch.py
+# Expected: "discovered 33 set-piece clips" → stages frames → runs TVCalib → saves parquet
+```
 
 ---
 
