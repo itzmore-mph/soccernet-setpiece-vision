@@ -13,11 +13,11 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 Reproducible pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
 
 **Pipeline stages:**
-1. Player detection — Soccana (YOLOv11n, football-finetuned)
-2. Multi-object tracking — ByteTrack for persistent player IDs across frames
-3. Team assignment — KMeans on per-track mean HSV jersey colour
+1. Player + Referee detection — Soccana (YOLOv11n, football-finetuned), classes 0 (Player) and 2 (Referee) in a single pass
+2. Multi-object tracking — ByteTrack for persistent IDs across frames
+3. Team assignment — KMeans on per-track mean HSV jersey colour (players only; referees excluded with `team=-1`)
 4. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography
-5. Pitch Control — Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m)
+5. Pitch Control — Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m); referees excluded from computation
 
 **Validation:** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
 
@@ -131,7 +131,8 @@ python scripts/run_tvcalib_batch.py
 
 ## Quick Start (from committed outputs, no SSD needed)
 
-Notebooks 02–04 read from committed Parquet files and require no video data.
+Notebooks 02 and 03 read entirely from committed Parquet files and require no video data.
+Notebook 04 requires SSD (broadcast frames) for its visualizations — skip or run interactively and skip Section 4–8 cells if no SSD is available.
 
 ```bash
 # 1. Install dependencies (Python 3.11 required)
@@ -140,6 +141,7 @@ pip install -r requirements.txt
 # 2. Run analysis notebooks (order matters)
 jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
 jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+# nb04 requires SSD — run interactively or only if SSD is mounted:
 jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
 
 # 3. Run validation table (from committed pipeline outputs)
