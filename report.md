@@ -62,8 +62,6 @@ MSc AI Applied to Sports · Sports Data Campus
 
 **Impact.** Clubs and analysts with access to broadcast video and a standard laptop can now generate a credible tactical view of set pieces without buying commercial tracking data. The tool is fully reproducible, openly documented, and ready to extend, with the priority next step being automatic ball detection so the workflow no longer depends on any external data feed.
 
-**Technical implementation (for technical readers).** The pipeline combines a football-specific player detector (Soccana, built on YOLOv11n; Jocher et al., 2023), multi-object tracking (ByteTrack; Zhang et al., 2022), shirt-colour clustering for team assignment, automatic camera calibration without ground-truth pitch lines (TVCalib; Theiner & Ewerth, 2023), and the time-to-intercept Pitch Control model from Shaw (2020). Ball positions are currently taken from SoccerNet Game State Reconstruction annotations (Somers et al., 2024). Validation uses distributional comparison (Kolmogorov-Smirnov test, histogram overlap) and per-frame paired statistics. Full numerical results are reported in Section 7.5 and Section 8.
-
 ---
 
 ## 2. Introduction
