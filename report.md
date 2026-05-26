@@ -713,7 +713,6 @@ soccernet-setpiece-vision/
         ks_table_tvcalib.py
         render_annotated_clips.py
         render_pc_overlay.py
-        render_gantt.py
     outputs/
         homographies_tvcalib.parquet
         detections_soccana_tvcalib.parquet
