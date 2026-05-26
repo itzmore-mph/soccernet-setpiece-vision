@@ -224,6 +224,7 @@ gantt
 **Constraints.**
 
 - *Data access.* SoccerNet GSR requires a credentialed download; access was obtained through the academic process. StatsBomb open data is freely available.
+- *Time limitations.* The Sports Data Campus submission deadline of 30 June 2026 fixes the upper bound of the planning window and is the binding driver of the eleven-week schedule shown in Table 2 and Figure 1.
 - *Hardware.* Apple Silicon laptop with 16 GB unified memory; SoccerNet video (~35 GB) hosted on an external USB-C SSD.
 - *External component.* TVCalib (Theiner & Ewerth, 2023) runs in a sibling conda environment with PyTorch 2.x patches; required configuring and validating a research codebase before pipeline integration could proceed.
 
@@ -234,7 +235,16 @@ gantt
 - Validation requires aligned pipeline and GT Pitch Control surfaces on a shared clip set.
 - Notebooks 02 through 04 are executable from committed Parquet outputs, allowing reproduction without the SSD or TVCalib environment after the initial pipeline run.
 
-### 4.5 Risk and Mitigation
+### 4.5 Business Rules
+
+A small number of explicit project rules shaped execution from start to finish. They are documented here so the planning context is auditable; the same rules are reinforced where they apply to individual phases later in the report.
+
+- *Inference-time data-leak rule.* SoccerNet GSR ground-truth annotations may be used only for validation. They are never consumed at detection, tracking, or calibration inference time. This rule is what makes the pipeline a defensible broadcast-only system and is the central methodological constraint of the project.
+- *Data licensing and access terms.* StatsBomb Euro 2024 open data is used under CC BY-SA 4.0 with attribution. SoccerNet GSR is accessed through the standard credentialed academic process (Somers et al., 2024). The Soccana detector weights are pulled from HuggingFace under their published open licence; no weights are redistributed in this repository.
+- *Reproducibility and hardware rule.* The pipeline must execute end-to-end on a consumer laptop with no cloud dependency. All intermediate outputs are committed as Parquet so that notebooks 02 through 04 reproduce on a fresh checkout without the SSD or the TVCalib sibling environment.
+- *Ethics rule.* No personal data, biometric data, or player identities are stored, processed, or published. Player positions are treated as anonymous spatial coordinates throughout the pipeline and the report (full statement in section 3.7).
+
+### 4.6 Risk and Mitigation
 
 The most material project risk that materialised was the `action_position` misinterpretation: the pipeline was initially processing end-of-clip open-play frames instead of set-piece formations. This was caught during qualitative inspection of intermediate outputs in W4–W5, fixed by computing the centre frame as `FRAME_WINDOW + 1 = 16` rather than treating `action_position` as a clip-local index, and documented as a methodological contribution. The mitigation lesson is that intermediate visual inspection is essential when the pipeline produces metrics that look plausible in aggregate but are semantically wrong.
 
