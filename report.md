@@ -171,7 +171,7 @@ Develop a reproducible computer vision pipeline that extracts Pitch Control from
 
 ### 4.1 Planning Approach
 
-The project follows CRISP-DM's phased structure, with explicit feedback loops between Data Understanding and Data Preparation to accommodate mid-project corrections. The plan below is presented in illustrative weeks (W1 through W16) rather than calendar dates, reflecting the iterative nature of the work and the fact that several phases overlap.
+The project follows CRISP-DM's phased structure, with explicit feedback loops between Data Understanding and Data Preparation to accommodate mid-project corrections. The plan below is presented in illustrative weeks (W1 through W11) rather than calendar dates, reflecting the iterative nature of the work and the fact that several phases overlap.
 
 ### 4.2 Phase Plan
 
@@ -181,25 +181,43 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 |---|---|---|---|
 | W1–W2 | Business Understanding | Problem framing, stakeholder identification, set-piece literature review | Research questions locked |
 | W2–W4 | Data Understanding | StatsBomb Euro 2024 EDA, SoccerNet GSR scan, `action_position` audit | `setpieces.parquet`, `gt_spatial_benchmarks.parquet` |
-| W4–W7 | Data Preparation (pipeline track) | TVCalib integration, Soccana detection + ByteTrack, KMeans team assignment | `homographies_tvcalib.parquet`, `detections_soccana_tvcalib.parquet` |
-| W5–W7 | Data Preparation (GT track) | SoccerNet bbox_pitch parsing, ball-position cache | `detections_gt_full.parquet`, `ball_positions.parquet` |
-| W7–W10 | Modeling | Laurie Shaw TTI zero-velocity adaptation, PC surface computation | `pitch_control_*.parquet` |
-| W10–W12 | Evaluation | Distributional KS, paired Pearson/Spearman/MAE, bias diagnosis | `validation_summary_tvcalib.parquet`, `validation_paired.parquet` |
-| W12–W14 | Deployment | Broadcast-overlay visualizations, three-panel stills, animated GIF/MP4 | `still_*.png`, `anim_*.gif`, `video_*.mp4` |
-| W14–W16 | Reporting | Notebook narrative, thesis write-up, final review | `report.md`, executable notebooks |
+| W3–W5 | Data Preparation (pipeline track) | TVCalib integration, Soccana detection + ByteTrack, KMeans team assignment | `homographies_tvcalib.parquet`, `detections_soccana_tvcalib.parquet` |
+| W4–W5 | Data Preparation (GT track) | SoccerNet bbox_pitch parsing, ball-position cache | `detections_gt_full.parquet`, `ball_positions.parquet` |
+| W5–W7 | Modeling | Laurie Shaw TTI zero-velocity adaptation, PC surface computation | `pitch_control_*.parquet` |
+| W7–W9 | Evaluation | Distributional KS, paired Pearson/Spearman/MAE, bias diagnosis | `validation_summary_tvcalib.parquet`, `validation_paired.parquet` |
+| W9–W10 | Deployment | Broadcast-overlay visualizations, three-panel stills, animated GIF/MP4 | `still_*.png`, `anim_*.gif`, `video_*.mp4` |
+| W10–W11 | Reporting | Notebook narrative, thesis write-up, final review | `report.md`, executable notebooks |
 
-![Figure 1: Project Gantt chart showing the eight CRISP-DM phases across illustrative weeks W1–W16. Overlapping bars highlight that the pipeline and GT data-preparation tracks run partly in parallel.](outputs/figures/06_gantt_timeline.png)
+The same phase plan is also expressed as a Mermaid Gantt source block (renders directly in GitHub and any Mermaid-aware viewer) and as a pre-rendered PNG below (used by the PDF and DOCX builds).
+
+```mermaid
+gantt
+    title CRISP-DM phase plan (W1-W11)
+    dateFormat  X
+    axisFormat  W%w
+    section CRISP-DM
+    Business Understanding        :a1, 1, 1w
+    Data Understanding            :a2, 2, 2w
+    Data Preparation (pipeline)   :a3, 3, 2w
+    Data Preparation (GT)         :a4, 4, 1w
+    Modeling                      :a5, 5, 2w
+    Evaluation                    :a6, 7, 2w
+    Deployment                    :a7, 9, 1w
+    Reporting                     :a8, 10, 1w
+```
+
+![Figure 1: Project Gantt chart showing the eight CRISP-DM phases across illustrative weeks W1–W11. Overlapping bars highlight that the pipeline and GT data-preparation tracks run partly in parallel.](outputs/figures/06_gantt_timeline.png)
 
 ### 4.3 Key Milestones
 
 1. **Research scope locked** (end W2): primary validation dataset, set-piece classes, success criteria all defined.
-2. **TVCalib batch complete** (W6): 1,023 homographies computed for all 33 clips, removing GT pitch-line dependency at inference.
-3. **`action_position` data-quality discovery** (W6–W7): mid-project finding that `action_position` is a global broadcast frame number, not a clip-local index. Required rewriting the frame-window logic before modelling could produce correct outputs.
-4. **First end-to-end pipeline run** (W9): pipeline runs all 33 clips end-to-end with zero homography failures.
-5. **Validation cohort frozen at 31 clips** (W10): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window.
-6. **KS validation table complete** (W11): per-metric distributional comparison published with no selective reporting.
-7. **Three-way error taxonomy identified** (W12): the partition into calibrated, underestimated, and inverted metrics emerges from the paired analysis.
-8. **Final deliverables ready** (W16): committed Parquet outputs, executable notebooks, thesis report, and overlay visualizations.
+2. **TVCalib batch complete** (W4): 1,023 homographies computed for all 33 clips, removing GT pitch-line dependency at inference.
+3. **`action_position` data-quality discovery** (W4–W5): mid-project finding that `action_position` is a global broadcast frame number, not a clip-local index. Required rewriting the frame-window logic before modelling could produce correct outputs.
+4. **First end-to-end pipeline run** (W6): pipeline runs all 33 clips end-to-end with zero homography failures.
+5. **Validation cohort frozen at 31 clips** (W7): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window.
+6. **KS validation table complete** (W8): per-metric distributional comparison published with no selective reporting.
+7. **Three-way error taxonomy identified** (W8–W9): the partition into calibrated, underestimated, and inverted metrics emerges from the paired analysis.
+8. **Final deliverables ready** (W11): committed Parquet outputs, executable notebooks, thesis report, and overlay visualizations.
 
 ### 4.4 Constraints and Dependencies
 
@@ -218,7 +236,7 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 
 ### 4.5 Risk and Mitigation
 
-The most material project risk that materialised was the `action_position` misinterpretation: the pipeline was initially processing end-of-clip open-play frames instead of set-piece formations. This was caught during qualitative inspection of intermediate outputs in W6, fixed by computing the centre frame as `FRAME_WINDOW + 1 = 16` rather than treating `action_position` as a clip-local index, and documented as a methodological contribution. The mitigation lesson is that intermediate visual inspection is essential when the pipeline produces metrics that look plausible in aggregate but are semantically wrong.
+The most material project risk that materialised was the `action_position` misinterpretation: the pipeline was initially processing end-of-clip open-play frames instead of set-piece formations. This was caught during qualitative inspection of intermediate outputs in W4–W5, fixed by computing the centre frame as `FRAME_WINDOW + 1 = 16` rather than treating `action_position` as a clip-local index, and documented as a methodological contribution. The mitigation lesson is that intermediate visual inspection is essential when the pipeline produces metrics that look plausible in aggregate but are semantically wrong.
 
 ---
 

@@ -1,9 +1,13 @@
 """Render the project Gantt chart for the CRISP-DM timeline (Section 4.2).
 
 Produces a single PNG showing one horizontal bar per CRISP-DM phase across
-W1-W16, matching the phase plan in Table 2 of the report. Output is written
+W1-W11, matching the phase plan in Table 2 of the report. Output is written
 to outputs/figures/06_gantt_timeline.png and is committed alongside the
 other report figures.
+
+The schedule is intentionally compressed into eleven weeks to reflect the
+actual MSc Final Project window; overlapping bars between the pipeline and
+GT preparation tracks (W3-W5 and W4-W5) preserve the real concurrency.
 
 Usage:
     python scripts/render_gantt.py
@@ -19,13 +23,15 @@ FIG_PATH = Path(__file__).resolve().parent.parent / "outputs" / "figures" / "06_
 PHASES = [
     ("Business Understanding",          1,  2),
     ("Data Understanding",              2,  4),
-    ("Data Preparation (pipeline)",     4,  7),
-    ("Data Preparation (GT)",           5,  7),
-    ("Modeling",                        7, 10),
-    ("Evaluation",                     10, 12),
-    ("Deployment",                     12, 14),
-    ("Reporting",                      14, 16),
+    ("Data Preparation (pipeline)",     3,  5),
+    ("Data Preparation (GT)",           4,  5),
+    ("Modeling",                        5,  7),
+    ("Evaluation",                      7,  9),
+    ("Deployment",                      9, 10),
+    ("Reporting",                      10, 11),
 ]
+
+WEEK_MIN, WEEK_MAX = 1, 11
 
 
 def render(out_path: Path = FIG_PATH) -> Path:
@@ -62,9 +68,9 @@ def render(out_path: Path = FIG_PATH) -> Path:
     ax.set_yticklabels(labels, fontsize=10)
     ax.invert_yaxis()
 
-    ax.set_xlim(0.5, 16.5)
-    ax.set_xticks(range(1, 17))
-    ax.set_xticklabels([f"W{w}" for w in range(1, 17)], fontsize=8)
+    ax.set_xlim(WEEK_MIN - 0.5, WEEK_MAX + 0.5)
+    ax.set_xticks(range(WEEK_MIN, WEEK_MAX + 1))
+    ax.set_xticklabels([f"W{w}" for w in range(WEEK_MIN, WEEK_MAX + 1)], fontsize=9)
     ax.set_xlabel("Project week", fontsize=10)
 
     ax.grid(axis="x", linestyle="--", linewidth=0.5, color="#CCCCCC", alpha=0.7)
@@ -73,7 +79,7 @@ def render(out_path: Path = FIG_PATH) -> Path:
         ax.spines[spine].set_visible(False)
 
     ax.set_title(
-        "Project Gantt chart - CRISP-DM phases across illustrative weeks W1-W16",
+        f"Project Gantt chart - CRISP-DM phases across illustrative weeks W{WEEK_MIN}-W{WEEK_MAX}",
         fontsize=11,
         pad=12,
     )
