@@ -32,7 +32,7 @@ MSc AI Applied to Sports · Sports Data Campus
 8. Discussion of Results
 9. Conclusions and Future Work
 10. Bibliography
-11. Annexes
+11. Appendices
 
 *(When rendered to PDF via pandoc with `toc: true`, a paginated table of contents is produced automatically; the list above is provided for direct readers of the markdown source.)*
 
@@ -40,27 +40,29 @@ MSc AI Applied to Sports · Sports Data Campus
 
 ## 1. Executive Summary
 
-**This project delivers a fully open-source pipeline that produces a deployment-ready Pitch Control metric from broadcast video alone, validated against ground-truth annotations on 33 SoccerNet GSR set-piece clips.**
+**This project delivers an open-source tool that turns broadcast football footage into a tactical metric called Pitch Control, giving clubs without expensive tracking systems a way to analyse set pieces using video alone.**
 
-Optical player tracking powers modern tactical analysis but remains commercially restricted to elite clubs and leagues. This project closes a portion of that gap with an open-source computer vision pipeline that derives Pitch Control from broadcast video, requiring no proprietary tracking hardware.
+**The problem.** Top clubs use specialist tracking systems to see which team controls each part of the pitch at any moment. Smaller clubs, women's leagues, academies, and scouts cannot afford these systems, so they lose a competitive edge in analysing corners and free kicks, where spatial control often decides whether a chance is created.
 
-**Problem.** Resource-constrained clubs (second divisions, women's football, academies) lack access to positional tracking data. Set-piece analysis, where spatial dominance determines danger, is out of reach without it.
+**The solution.** This project builds a computer vision pipeline that watches broadcast video, identifies each player, tracks them across frames, tells the two teams apart by shirt colour, places everyone on a virtual pitch, and calculates how much of that pitch each team controls. The whole process runs automatically on a normal laptop in about 30 minutes per match clip, with no cloud services or paid software required.
 
-**Solution.** A fully autonomous player-detection pipeline: Soccana (a YOLOv11n model fine-tuned for football, built on the Ultralytics framework; Jocher et al., 2023) detects and tracks players via ByteTrack (Zhang et al., 2022), assigns stable team labels via per-track KMeans on HSV jersey colour, projects pixel coordinates to metric pitch via TVCalib autonomous camera calibration (Theiner & Ewerth, 2023), and computes attacking Pitch Control using the time-to-intercept model from Shaw (2020). Ball positions are sourced from SoccerNet Game State Reconstruction (GSR) ground-truth annotations (Somers et al., 2024); autonomous ball detection is noted as a future work item.
+**How it was tested.** The tool was evaluated on 33 set-piece clips (17 corners, 16 free kicks) from a public research dataset (SoccerNet), and its output was compared frame-by-frame against the dataset's hand-labelled reference data.
 
-**Validation.** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth player annotations (Somers et al., 2024) on 33 set-piece clips (17 corners, 16 direct free kicks).
+**What works well.**
 
-**Key results.**
+- The system successfully processed every one of the 33 clips end-to-end.
+- For the most operationally relevant question, "who controls the area where the ball is", the tool's estimate closely matches the reference data.
+- The tool is most reliable when measuring control across larger zones such as the attacking third of the pitch.
+- It runs entirely on consumer hardware (standard laptop), so there is no recurring cloud cost.
 
-- Soccana detects players in all 33/33 clips with zero homography failures (detection phase).
-- Pitch Control is computed for 31 pipeline clips and 31 GT clips; 2 clips (SNGS-125, SNGS-145) are excluded from the PC phase due to missing ball annotations in all frames.
-- `pc_at_ball` (control at ball location): bias = -0.051, histogram overlap = 0.804, per-frame Pearson r = 0.511.
-- `pc_in_third` is the most reliable metric: bias = +0.010, histogram overlap = 0.903.
-- `pc_in_box` has the largest systematic error (+0.216 bias): KMeans team assignment degrades in crowded penalty areas during corners, inverting the team label in that zone for a subset of frames.
-- Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.15–0.16: pipeline detects fewer players per frame (mean 15.99 vs GT 18.69) with a larger shortfall on the defending team, compressing attacking control across the surface under the Shaw model.
-- Full pipeline runs on a standard consumer laptop (~30 min on Apple Silicon MPS, longer on CPU-only hardware), no cloud dependency.
+**Where it falls short.**
 
-**Impact.** A broadcast-only Pitch Control pipeline that produces distributionally honest estimates of the most operationally meaningful set-piece signal, deployable by any club with broadcast video access and a laptop.
+- Inside the crowded penalty box during corners, the system sometimes confuses which team a player belongs to because attackers and defenders stand very close together. This is the main source of error and the clearest target for future improvement.
+- The tool detects slightly fewer players per frame than the reference, and tends to miss defenders more often than attackers, which causes it to mildly underestimate overall control values.
+
+**Impact.** Clubs and analysts with access to broadcast video and a standard laptop can now generate a credible tactical view of set pieces without buying commercial tracking data. The tool is fully reproducible, openly documented, and ready to extend, with the priority next step being automatic ball detection so the workflow no longer depends on any external data feed.
+
+**Technical implementation (for technical readers).** The pipeline combines a football-specific player detector (Soccana, built on YOLOv11n; Jocher et al., 2023), multi-object tracking (ByteTrack; Zhang et al., 2022), shirt-colour clustering for team assignment, automatic camera calibration without ground-truth pitch lines (TVCalib; Theiner & Ewerth, 2023), and the time-to-intercept Pitch Control model from Shaw (2020). Ball positions are currently taken from SoccerNet Game State Reconstruction annotations (Somers et al., 2024). Validation uses distributional comparison (Kolmogorov-Smirnov test, histogram overlap) and per-frame paired statistics. Full numerical results are reported in Section 7.5 and Section 8.
 
 ---
 
@@ -100,7 +102,7 @@ A reproducible, validated pipeline from broadcast video to Pitch Control, with:
 
 ### 2.6 Research Structure and Preview
 
-Section 3 defines the research objectives and success criteria. Section 4 lays out the project timeline, milestones, and constraints. Section 5 describes the full pipeline architecture and technology stack. Section 6 explains the CRISP-DM methodology and its adaptations. Section 7 documents each phase of development in detail, including all data preparation choices, modelling decisions, and evaluation results. Section 8 discusses the findings, identifies cross-metric patterns, and articulates methodological limits. Section 9 draws conclusions, proposes a development roadmap, and outlines future work. Annexes provide the repository structure, model parameters, data sources, and full reproducibility instructions.
+Section 3 defines the research objectives and success criteria. Section 4 lays out the project timeline, milestones, and constraints. Section 5 describes the full pipeline architecture and technology stack. Section 6 explains the CRISP-DM methodology and its adaptations. Section 7 documents each phase of development in detail, including all data preparation choices, modelling decisions, and evaluation results. Section 8 discusses the findings, identifies cross-metric patterns, and articulates methodological limits. Section 9 draws conclusions, proposes a development roadmap, and outlines future work. Appendices provide the repository structure, model parameters, data sources, and full reproducibility instructions.
 
 ---
 
@@ -501,7 +503,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 - Runtime: ~30 minutes for 33 clips.
 - Parquet outputs compatible with DuckDB, pandas, polars.
 - TVCalib (Theiner & Ewerth, 2023) removes any dependency on GT pitch-line annotations for camera calibration.
-- Three-panel animated visualizations (broadcast frame, metric minimap, PC heatmap) produced as GIF and MP4 for representative corner and direct free-kick clips (SNGS-116, SNGS-122), now correctly showing frames 1–31 of each clip (the actual set-piece formation); static three-panel stills generated for thesis embedding (see Annex A).
+- Three-panel animated visualizations (broadcast frame, metric minimap, PC heatmap) produced as GIF and MP4 for representative corner and direct free-kick clips (SNGS-116, SNGS-122), now correctly showing frames 1–31 of each clip (the actual set-piece formation); static three-panel stills generated for thesis embedding (see Appendix A).
 
 ![Figure 12: Three-panel deployment overlay for a corner (SNGS-116): broadcast frame with detections, metric minimap, and Pitch Control heatmap.](outputs/figures/still_corner_SNGS-116.png)
 
@@ -682,9 +684,9 @@ Zhang, Y., Sun, P., Jiang, Y., Yu, D., Weng, F., Yuan, Z., Luo, P., Liu, W., & W
 
 ---
 
-## 11. Annexes
+## 11. Appendices
 
-### Annex A: Repository Structure
+### Appendix A: Repository Structure
 
 ```
 soccernet-setpiece-vision/
@@ -729,7 +731,7 @@ soccernet-setpiece-vision/
     report.md
 ```
 
-### Annex B: Key Model Parameters
+### Appendix B: Key Model Parameters
 
 **Table 11: Locked pipeline parameters and source files.**
 
@@ -749,7 +751,7 @@ soccernet-setpiece-vision/
 | KS alpha | 0.05 | nb03 |
 | Histogram bins | 12 | nb03 |
 
-### Annex C: Data Sources
+### Appendix C: Data Sources
 
 **Table 12: Datasets, models, and external resources with access mechanism.**
 
@@ -760,7 +762,7 @@ soccernet-setpiece-vision/
 | Soccana weights | HuggingFace (Adit-jain/soccana) |
 | TVCalib | Pre-computed, committed as homographies_tvcalib.parquet |
 
-### Annex D: Reproducibility
+### Appendix D: Reproducibility
 
 **Environment:** Python 3.11, conda env `py311-dev`. Key packages: ultralytics 8.3.107, torch >=2.1.0, scipy, scikit-learn, mplsoccer, statsbombpy.
 
