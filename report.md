@@ -188,6 +188,8 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 | W12–W14 | Deployment | Broadcast-overlay visualizations, three-panel stills, animated GIF/MP4 | `still_*.png`, `anim_*.gif`, `video_*.mp4` |
 | W14–W16 | Reporting | Notebook narrative, thesis write-up, final review | `report.md`, executable notebooks |
 
+![Figure 1: Project Gantt chart showing the eight CRISP-DM phases across illustrative weeks W1–W16. Overlapping bars highlight that the pipeline and GT data-preparation tracks run partly in parallel.](outputs/figures/06_gantt_timeline.png)
+
 ### 4.3 Key Milestones
 
 1. **Research scope locked** (end W2): primary validation dataset, set-piece classes, success criteria all defined.
@@ -384,25 +386,25 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 
 **Why set pieces:** Near-static camera, all players in frame, ball position reliably available from event feeds. Of 706 Euro 2024 set pieces, 65.7% produced no shot within 10 s, 32.4% produced a shot, and 1.8% produced a goal, placing set pieces among the highest-leverage repeatable game situations for tactical investment.
 
-![Figure 1: Set-piece outcome distribution within 10 seconds of execution across 706 Euro 2024 set pieces.](outputs/figures/04_setpiece_outcomes_10s.png)
+![Figure 2: Set-piece outcome distribution within 10 seconds of execution across 706 Euro 2024 set pieces.](outputs/figures/04_setpiece_outcomes_10s.png)
 
 ### 7.2 Phase 2: Data Understanding
 
 **StatsBomb Euro 2024 (nb01).** 51 matches, 706 set-piece events (508 corners, 198 direct free kicks), drawn from the StatsBomb open-data release (StatsBomb, 2024) and accessed via `statsbombpy`. Freeze-frame coverage for this subset is 64.2% (453/706 events), as not every event in the open data release carries an associated 360 freeze frame. Used only for distributional context on player counts and set-piece outcomes; not used in the primary validation.
 
-![Figure 2: Set-piece event counts by type across UEFA Euro 2024 (StatsBomb open data).](outputs/figures/01_setpiece_counts.png)
+![Figure 3: Set-piece event counts by type across UEFA Euro 2024 (StatsBomb open data).](outputs/figures/01_setpiece_counts.png)
 
-![Figure 3: Spatial distribution of set-piece origins on the pitch.](outputs/figures/02_setpiece_locations.png)
+![Figure 4: Spatial distribution of set-piece origins on the pitch.](outputs/figures/02_setpiece_locations.png)
 
 **SoccerNet GSR.** Drawing on the Game State Reconstruction benchmark (Somers et al., 2024), part of the broader SoccerNet dataset line (Deliege et al., 2021), 33 clips were identified with action_class in {Corner, Direct free-kick}: 17 corners, 16 direct free kicks. Per-frame player annotations (bbox_pitch) and pitch-line annotations are provided. TVCalib homographies (Theiner & Ewerth, 2023) computed for all 1,023 frames (33 clips × 31 frames).
 
-![Figure 4: Player spatial density by set-piece type, derived from SoccerNet GSR ground-truth annotations.](outputs/figures/05_player_density_by_setpiece.png)
+![Figure 5: Player spatial density by set-piece type, derived from SoccerNet GSR ground-truth annotations.](outputs/figures/05_player_density_by_setpiece.png)
 
 **Note on action_position.** The `action_position` field in SoccerNet GSR Labels-GameState.json is a global broadcast frame number (ranging from ~300,000 to ~2,600,000), not a clip-local index. Clips are 750 frames numbered 1–750, with the set-piece occurring at frame 1 (confirmed by GT ball-position coordinates at the corner arc on frame 1 for all corner clips). The pipeline uses `centre = FRAME_WINDOW + 1 = 16` to place the ±15-frame window at frames 1–31, covering the static set-piece formation.
 
 ### 7.3 Phase 3: Data Preparation
 
-![Figure 5: Soccana multiclass detection example showing Player, Referee, and (informational) Ball classes on a broadcast frame.](outputs/figures/11_multiclass_detections.png)
+![Figure 6: Soccana multiclass detection example showing Player, Referee, and (informational) Ball classes on a broadcast frame.](outputs/figures/11_multiclass_detections.png)
 
 **Pipeline track (run_soccana_tvcalib.py):**
 1. Soccana detection (YOLOv11n architecture; Jocher et al., 2023) at confidence 0.40, classes 0 (Player) and 2 (Referee) in a single forward pass.
@@ -418,7 +420,7 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 
 **Detection shortfall:** Pipeline produces 2,330 fewer rows than GT (12.6% shortfall). Mean players per frame: pipeline 15.99 vs GT 18.69. The defending-team shortfall is larger (pipeline 7.41 vs GT 9.13 per frame) than the attacking-team shortfall (pipeline 8.58 vs GT 9.56), consistent with defenders clustering in occluded, crowded positions near the goal. This asymmetric shortfall drives the directional bias on global metrics under the Shaw (2020) model.
 
-![Figure 6: Players-per-frame distribution: pipeline detections (Soccana + ByteTrack) vs SoccerNet GSR ground truth.](outputs/figures/03_players_per_frame.png)
+![Figure 7: Players-per-frame distribution: pipeline detections (Soccana + ByteTrack) vs SoccerNet GSR ground truth.](outputs/figures/03_players_per_frame.png)
 
 **Ball positions (dump_ball_positions.py):** 1,023 frame positions parsed from SoccerNet GSR GT annotations (bbox_pitch, category_id=4). 949/1,023 frames have valid ball coordinates (within ±2 m of pitch boundaries). SNGS-125 and SNGS-145 have no ball annotation in any frame within the window; these 2 clips are excluded from the PC computation, reducing the effective validation set from 33 to 31 clips.
 
@@ -445,7 +447,7 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 
 ### 7.5 Phase 5: Evaluation
 
-![Figure 7: Sample Pitch Control surface, pipeline vs ground truth, for a representative corner frame.](outputs/figures/07_pc_sample_pipeline_vs_gt.png)
+![Figure 8: Sample Pitch Control surface, pipeline vs ground truth, for a representative corner frame.](outputs/figures/07_pc_sample_pipeline_vs_gt.png)
 
 **Table 7: Distributional comparison of Pitch Control summary metrics (pipeline n=940, GT n=949).**
 
@@ -457,9 +459,9 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 | **pc_in_third** | **0.523** | **0.513** | **+0.010** | 0.104 | <0.001 | **0.903** | No |
 | pc_area_gt_0p5 | 0.548 | 0.703 | -0.155 | 0.261 | <0.001 | 0.721 | No |
 
-![Figure 8: Distributional histogram overlays for each Pitch Control summary metric, pipeline vs GT.](outputs/figures/08_histogram_overlays.png)
+![Figure 9: Distributional histogram overlays for each Pitch Control summary metric, pipeline vs GT.](outputs/figures/08_histogram_overlays.png)
 
-![Figure 9: KS validation summary table rendered as a figure for inline reference.](outputs/figures/14_ks_table_tvcalib.png)
+![Figure 10: KS validation summary table rendered as a figure for inline reference.](outputs/figures/14_ks_table_tvcalib.png)
 
 **Table 8: Per-frame paired comparison (n=940 paired frames).**
 
@@ -471,7 +473,7 @@ Two adaptations were required to apply CRISP-DM to this computer vision pipeline
 | **pc_in_third** | 0.056 | 0.045 | **0.112** | **+0.010** |
 | pc_area_gt_0p5 | 0.336 | 0.252 | 0.222 | -0.155 |
 
-![Figure 10: Per-frame paired scatter plots, pipeline vs GT, for each Pitch Control metric.](outputs/figures/09_paired_scatter.png)
+![Figure 11: Per-frame paired scatter plots, pipeline vs GT, for each Pitch Control metric.](outputs/figures/09_paired_scatter.png)
 
 Low Spearman values reflect compressed score distributions at the set-piece moment (both pipeline and GT cluster near their respective means), which reduces rank variation and makes Spearman unreliable relative to Pearson.
 
@@ -491,9 +493,9 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 - TVCalib (Theiner & Ewerth, 2023) removes any dependency on GT pitch-line annotations for camera calibration.
 - Three-panel animated visualizations (broadcast frame, metric minimap, PC heatmap) produced as GIF and MP4 for representative corner and direct free-kick clips (SNGS-116, SNGS-122), now correctly showing frames 1–31 of each clip (the actual set-piece formation); static three-panel stills generated for thesis embedding (see Annex A).
 
-![Figure 11: Three-panel deployment overlay for a corner (SNGS-116): broadcast frame with detections, metric minimap, and Pitch Control heatmap.](outputs/figures/still_corner_SNGS-116.png)
+![Figure 12: Three-panel deployment overlay for a corner (SNGS-116): broadcast frame with detections, metric minimap, and Pitch Control heatmap.](outputs/figures/still_corner_SNGS-116.png)
 
-![Figure 12: Three-panel deployment overlay for a direct free kick (SNGS-122): broadcast frame with detections, metric minimap, and Pitch Control heatmap.](outputs/figures/still_direct_free-kick_SNGS-122.png)
+![Figure 13: Three-panel deployment overlay for a direct free kick (SNGS-122): broadcast frame with detections, metric minimap, and Pitch Control heatmap.](outputs/figures/still_direct_free-kick_SNGS-122.png)
 
 ### 7.7 Project Outcomes and Deliverables
 
@@ -538,7 +540,7 @@ Low Spearman values reflect compressed score distributions at the set-piece mome
 
 Global metrics (`pc_mean`, `pc_area_gt_0p5`) are underestimated by ~0.15–0.16. The pipeline detects 15.99 mean players per frame vs GT 18.69, with a larger shortfall on defenders (7.41 vs GT 9.13) than on attackers (8.58 vs GT 9.56). In the Shaw (2020) model, additional defenders compress attacking control uniformly across the surface; the asymmetric recall gap means attacking control is underestimated. This is a detection completeness problem, predictable from the model's mathematics.
 
-![Figure 13: Detected defender count per frame vs `pc_mean`. The negative trend confirms that defender-recall shortfall is the dominant driver of the global underestimation bias.](outputs/figures/10_defenders_vs_pc_mean.png)
+![Figure 14: Detected defender count per frame vs `pc_mean`. The negative trend confirms that defender-recall shortfall is the dominant driver of the global underestimation bias.](outputs/figures/10_defenders_vs_pc_mean.png)
 
 ### 8.4 Why no metrics pass strict KS
 
@@ -693,6 +695,7 @@ soccernet-setpiece-vision/
         ks_table_tvcalib.py
         render_annotated_clips.py
         render_pc_overlay.py
+        render_gantt.py
     outputs/
         homographies_tvcalib.parquet
         detections_soccana_tvcalib.parquet
@@ -705,6 +708,7 @@ soccernet-setpiece-vision/
         setpieces.parquet
         gt_spatial_benchmarks.parquet
         figures/
+            06_gantt_timeline.png               ← Project Gantt chart (Figure 1)
             11_multiclass_detections.png        ← Soccana Player/Ball/Referee detection (methods figure)
             still_corner_SNGS-116.png          ← three-panel thesis figure (corner)
             still_direct_free-kick_SNGS-122.png ← three-panel thesis figure (free kick)
