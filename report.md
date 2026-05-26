@@ -188,24 +188,6 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 | W9–W10 | Deployment | Broadcast-overlay visualizations, three-panel stills, animated GIF/MP4 | `still_*.png`, `anim_*.gif`, `video_*.mp4` |
 | W10–W11 | Reporting | Notebook narrative, thesis write-up, final review | `report.md`, executable notebooks |
 
-The same phase plan is also expressed as a Mermaid Gantt source block (renders directly in GitHub and any Mermaid-aware viewer) and as a pre-rendered PNG below (used by the PDF and DOCX builds).
-
-```mermaid
-gantt
-    title CRISP-DM phase plan (W1-W11)
-    dateFormat  X
-    axisFormat  W%w
-    section CRISP-DM
-    Business Understanding        :a1, 1, 1w
-    Data Understanding            :a2, 2, 2w
-    Data Preparation (pipeline)   :a3, 3, 2w
-    Data Preparation (GT)         :a4, 4, 1w
-    Modeling                      :a5, 5, 2w
-    Evaluation                    :a6, 7, 2w
-    Deployment                    :a7, 9, 1w
-    Reporting                     :a8, 10, 1w
-```
-
 ![Figure 1: Project Gantt chart showing the eight CRISP-DM phases across illustrative weeks W1–W11. Overlapping bars highlight that the pipeline and GT data-preparation tracks run partly in parallel.](outputs/figures/06_gantt_timeline.png)
 
 ### 4.3 Key Milestones
