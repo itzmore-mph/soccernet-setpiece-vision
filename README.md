@@ -44,10 +44,13 @@ soccernet-setpiece-vision/
 │   ├── ks_table_tvcalib.py       # Validation table + figure
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
-├── outputs/                      # Parquet outputs + figures/
-├── docs/                         # Project proposal documents
+├── outputs/                      # All committed (pipeline runs without the SSD)
+│   ├── *.parquet                 # 10 intermediate + result tables (detections, homographies, pitch control, validation)
+│   └── figures/                  # Notebook + validation figures (PNG)
+├── docs/                         # Proposal PDFs/DOCX + design specs
 ├── report.md                     # Thesis source (pandoc → PDF)
 ├── requirements.txt              # Direct dependencies with version ranges
+├── requirements.lock             # Fully pinned, platform-aware lockfile (Windows + macOS)
 ├── CITATION.cff
 └── LICENSE
 ```

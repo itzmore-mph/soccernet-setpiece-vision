@@ -22,7 +22,8 @@ Thumbs.db
 .vscode/
 .idea/
 .kiro/
-.CLAUDE.md
+CLAUDE.md
+pyrightconfig.json
 .claude/
 
 # Conda / venv (env lives in py311-dev outside repo)
