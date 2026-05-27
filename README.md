@@ -136,7 +136,9 @@ Notebook 04 requires SSD (broadcast frames) for its visualizations — skip or r
 
 ```bash
 # 1. Install dependencies (Python 3.11 required)
-pip install -r requirements.txt
+pip install -r requirements.txt          # version ranges, simple
+# or, for an exact reproducible environment (Windows + macOS):
+# pip install -r requirements.lock        # fully pinned, platform-aware
 
 # 2. Run analysis notebooks (order matters)
 jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
@@ -161,8 +163,15 @@ Reproduces all results end-to-end from the SoccerNet GSR video clips.
 ```bash
 conda create -n py311-dev python=3.11 -y
 conda activate py311-dev
-pip install -r requirements.txt
+pip install -r requirements.txt          # version ranges
+# or, for an exact reproducible environment: pip install -r requirements.lock
 ```
+
+`requirements.lock` is a fully pinned, platform-aware lockfile (generated with
+`uv pip compile requirements.txt -o requirements.lock --universal --python-version 3.11`).
+It resolves identically on Windows and macOS; OS-specific wheels (e.g. Apple-Silicon
+`torch`/`hf-xet`, Windows `pywinpty`) are selected automatically via environment markers.
+Regenerate it whenever `requirements.txt` changes.
 
 ### 2. Configure data paths
 
