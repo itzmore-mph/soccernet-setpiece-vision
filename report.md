@@ -80,7 +80,17 @@ Set pieces (corners and direct free kicks) are tactically high-leverage and anal
 
 Prior literature covers player detection, tracking, calibration, and Pitch Control modelling individually. Detection has matured through the YOLO family (Redmon & Farhadi, 2018; Jocher et al., 2023); multi-object tracking by association is well-established (Zhang et al., 2022); broadcast camera calibration without ground-truth pitch lines has been addressed by TVCalib (Theiner & Ewerth, 2023); the SoccerNet line of benchmarks (Deliege et al., 2021; Somers et al., 2024) provides annotated broadcast footage; and multi-task learning for joint re-identification, team affiliation, and role classification has been proposed for sports tracking (Mansourian et al., 2023). The end-to-end chain, broadcast pixels through to a distributionally validated tactical metric, without proprietary tracking and without ground-truth annotations leaking into the calibration step, remains underdeveloped.
 
-### 2.4 Contribution
+### 2.4 Stakeholder Impact and Expected Benefits
+
+For a tactical analyst or head coach, the pipeline provides a spatial view of set-piece control, quantifying which team dominates which zone at the moment of execution, without requiring a data engineering team or a tracking subscription. The output is a three-panel broadcast overlay that can be interpreted directly on screen.
+
+For a sporting director or technical lead, the pipeline enables repeatable, comparable set-piece analysis across opponents and competitions using only publicly available or club-owned broadcast footage.
+
+For a data scientist or analyst building on this work, the fully documented codebase, committed Parquet outputs, and explicit error taxonomy provide a validated foundation for extension, rather than a black-box tool.
+
+The primary operational constraint is that ball position currently requires an external annotation or event feed. All other pipeline components run without any ground-truth input.
+
+### 2.5 Contribution
 
 A reproducible, validated pipeline from broadcast video to Pitch Control, with:
 - Fully autonomous player detection and calibration (no GT annotations consumed at inference time)
@@ -88,7 +98,7 @@ A reproducible, validated pipeline from broadcast video to Pitch Control, with:
 - Bias diagnosis attributing residual error to differential detection recall between attackers and defenders
 - Consumer-hardware execution (Apple Silicon MPS or equivalent)
 
-### 2.5 Research Scope and Boundaries
+### 2.6 Research Scope and Boundaries
 
 **Data scope.** The primary validation dataset is SoccerNet GSR 2024 (Somers et al., 2024): 33 clips covering two set-piece classes (17 corners, 16 direct free kicks) drawn from the train, valid, test, and challenge splits. StatsBomb Euro 2024 open data (StatsBomb, 2024) is used only for distributional context on player counts and set-piece outcomes; it is not part of the primary validation.
 
@@ -98,7 +108,7 @@ A reproducible, validated pipeline from broadcast video to Pitch Control, with:
 
 **Out of scope.** Autonomous ball detection, player re-identification across clips, multi-camera setups, non-broadcast (e.g., tactical camera) footage, and tracking over full match sequences are all excluded. The pipeline is validated as a static-frame set-piece tool, not a real-time tracking system.
 
-### 2.6 Research Structure and Preview
+### 2.7 Research Structure and Preview
 
 Section 3 defines the research objectives and success criteria. Section 4 lays out the project timeline, milestones, and constraints. Section 5 describes the full pipeline architecture and technology stack. Section 6 explains the CRISP-DM methodology and its adaptations. Section 7 documents each phase of development in detail, including all data preparation choices, modelling decisions, and evaluation results. Section 8 discusses the findings, identifies cross-metric patterns, and articulates methodological limits. Section 9 draws conclusions, proposes a development roadmap, and outlines future work. Appendices provide the repository structure, model parameters, data sources, and full reproducibility instructions.
 
