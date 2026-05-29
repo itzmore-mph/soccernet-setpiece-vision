@@ -31,10 +31,16 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Ensure sibling scripts are importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _pipeline_core import verify_ssd_mount
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TVCALIB_ROOT = PROJECT_ROOT.parent / "tvcalib"
@@ -165,7 +171,7 @@ def parse_results(results: dict) -> pd.DataFrame:
 
 
 def main():
-    assert SSD_ROOT.exists(), f"SoccerNet GSR not mounted: {SSD_ROOT}"
+    verify_ssd_mount()
 
     clips = discover_clips()
     print(f"discovered {len(clips)} set-piece clips")

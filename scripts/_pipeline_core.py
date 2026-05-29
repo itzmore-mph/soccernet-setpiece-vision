@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+from collections import Counter
 from pathlib import Path
 
 import cv2
@@ -17,10 +19,11 @@ from sklearn.cluster import KMeans
 PITCH_LENGTH_M = 105.0
 PITCH_WIDTH_M = 68.0
 FRAME_WINDOW = 15
+FITTING_WINDOW = 250
 
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
-YOLO_CONF = 0.40
+YOLO_CONF = 0.25
 DEVICE = os.getenv("TORCH_DEVICE", "mps")
 
 T_CENTRED_TO_TOPLEFT = np.array([
@@ -28,6 +31,31 @@ T_CENTRED_TO_TOPLEFT = np.array([
     [0.0, 1.0, PITCH_WIDTH_M / 2],
     [0.0, 0.0, 1.0],
 ])
+
+
+def verify_ssd_mount(env_path: str = ".env") -> Path:
+    """Check SSD is mounted, return GSR root path or exit with a clear error.
+
+    Loads SOCCERNET_LOCAL_DIR from the .env file (or environment) and verifies
+    the path exists as a directory. Exits the process with a non-zero status
+    and descriptive error message if the SSD is not mounted.
+
+    Args:
+        env_path: Path to the .env file (relative to cwd or absolute).
+
+    Returns:
+        Path to the gamestate-2024 directory on the SSD.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv(env_path)
+    ssd_base = os.environ.get(
+        "SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr"
+    )
+    ssd_path = Path(ssd_base) / "gamestate-2024"
+    if not ssd_path.is_dir():
+        sys.exit(f"ERROR: SSD not mounted at {ssd_path}. Mount the drive and retry.")
+    return ssd_path
 
 
 def discover_setpiece_clips(gsr_root: Path) -> pd.DataFrame:
@@ -125,6 +153,86 @@ def assign_teams_kmeans(hsv_features: np.ndarray, k: int = 3, drop_frac: float =
     return labels
 
 
+def fit_global_kmeans(
+    track_hsv_samples: dict[int, list[np.ndarray]],
+) -> tuple[np.ndarray, dict]:
+    """Fit KMeans(k=3) on track-mean HSV vectors from all fitting frames.
+
+    Args:
+        track_hsv_samples: {track_id: [hsv_vector_frame1, hsv_vector_frame2, ...]}
+            Each hsv_vector is the output of jersey_hsv() for that track in that frame.
+
+    Returns:
+        centroids: np.ndarray of shape (3, D) — the 3 cluster centroids
+        label_map: dict mapping {track_id: cluster_label} based on each track's mean HSV
+    """
+    # Compute mean HSV vector per track, skipping NaN samples
+    track_ids: list[int] = []
+    track_means: list[np.ndarray] = []
+    for tid, samples in track_hsv_samples.items():
+        if not samples:
+            continue
+        stacked = np.array(samples)
+        # Filter out NaN rows (invalid jersey_hsv results)
+        valid_mask = ~np.isnan(stacked).any(axis=1)
+        if not valid_mask.any():
+            continue
+        mean_vec = stacked[valid_mask].mean(axis=0)
+        track_ids.append(tid)
+        track_means.append(mean_vec)
+
+    if len(track_means) < 3:
+        # Not enough tracks for k=3; return empty centroids and map
+        n = len(track_means)
+        if n == 0:
+            return np.empty((0, 3), dtype=np.float64), {}
+        # Fall back to k=n clusters
+        X = np.array(track_means)
+        km = KMeans(n_clusters=n, n_init=10, random_state=42)
+        labels = km.fit_predict(X)
+        label_map = {tid: int(lbl) for tid, lbl in zip(track_ids, labels)}
+        return km.cluster_centers_, label_map
+
+    X = np.array(track_means)
+    km = KMeans(n_clusters=3, n_init=10, random_state=42)
+    labels = km.fit_predict(X)
+    label_map = {tid: int(lbl) for tid, lbl in zip(track_ids, labels)}
+    return km.cluster_centers_, label_map
+
+
+def assign_teams_global_consensus(
+    per_frame_labels: dict[int, dict[int, int]],
+) -> dict[int, int]:
+    """Compute mode label per track_id across all frames (cross-frame consensus).
+
+    Args:
+        per_frame_labels: {frame_idx: {track_id: cluster_label}}
+            The cluster labels assigned to each track in each frame by the global
+            KMeans model.
+
+    Returns:
+        consensus: {track_id: team_label}
+            The most frequently occurring label for each track across all frames.
+            Ties are broken by picking the smallest label (deterministic).
+    """
+    # Collect all labels per track across frames
+    track_labels: dict[int, list[int]] = {}
+    for _frame_idx, frame_map in per_frame_labels.items():
+        for track_id, label in frame_map.items():
+            track_labels.setdefault(track_id, []).append(label)
+
+    # Compute mode per track; ties broken by smallest label
+    consensus: dict[int, int] = {}
+    for track_id, labels in track_labels.items():
+        counts = Counter(labels)
+        max_count = max(counts.values())
+        # Among labels with max count, pick the smallest (deterministic tie-break)
+        mode_label = min(lbl for lbl, cnt in counts.items() if cnt == max_count)
+        consensus[track_id] = mode_label
+
+    return consensus
+
+
 def track_frame(
     yolo, image_bgr: np.ndarray, player_class: int = 0, referee_class: int = 2
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -143,6 +251,8 @@ def track_frame(
         persist=True,
         device=DEVICE,
         verbose=False,
+        augment=True,       # TTA - Test-Time Augmentation
+        agnostic_nms=True,  # Class-agnostic NMS
     )[0]
     if res.boxes is None or len(res.boxes) == 0:
         return np.zeros((0, 6), dtype=np.float32), np.zeros((0, 5), dtype=np.float32)
@@ -164,12 +274,237 @@ def track_frame(
     return player_dets, referee_dets
 
 
+def detect_ball_frame(yolo_ball, image_bgr: np.ndarray) -> np.ndarray:
+    """Detect ball using Soccana class=1 at conf=0.15 with ByteTrack.
+
+    Args:
+        yolo_ball: YOLO model instance configured for ball detection.
+        image_bgr: BGR image frame as numpy array.
+
+    Returns:
+        np.ndarray of shape (N, 5): [x_center, y_center, w, h, conf]
+        or empty (0, 5) array if no detections.
+    """
+    res = yolo_ball.track(
+        source=image_bgr,
+        conf=0.15,
+        classes=[1],
+        tracker="bytetrack.yaml",
+        persist=True,
+        device=DEVICE,
+        verbose=False,
+    )[0]
+    if res.boxes is None or len(res.boxes) == 0:
+        return np.zeros((0, 5), dtype=np.float32)
+
+    xyxy = res.boxes.xyxy.cpu().numpy()
+    conf = res.boxes.conf.cpu().numpy()
+
+    x_center = (xyxy[:, 0] + xyxy[:, 2]) / 2.0
+    y_center = (xyxy[:, 1] + xyxy[:, 3]) / 2.0
+    w = xyxy[:, 2] - xyxy[:, 0]
+    h = xyxy[:, 3] - xyxy[:, 1]
+
+    return np.column_stack([x_center, y_center, w, h, conf]).astype(np.float32)
+
+
+def interpolate_ball_gaps(ball_df: pd.DataFrame, max_gap: int = 5) -> pd.DataFrame:
+    """Linear interpolation of ball position for gaps <= max_gap consecutive frames.
+
+    Args:
+        ball_df: DataFrame with columns: frame_idx, x_pitch, y_pitch.
+            Rows represent frames where ball was detected. Missing frames = gaps.
+        max_gap: Maximum gap size (in frames) to interpolate. Gaps > max_gap
+            are left unfilled.
+
+    Returns:
+        DataFrame with same columns plus interpolated rows for gaps <= max_gap.
+        An 'interpolated' boolean column marks which rows were filled.
+    """
+    if ball_df.empty:
+        return ball_df.assign(interpolated=pd.Series(dtype=bool))
+
+    df = ball_df.sort_values("frame_idx").reset_index(drop=True)
+    df["interpolated"] = False
+
+    interpolated_rows: list[dict] = []
+
+    for i in range(len(df) - 1):
+        frame_a = int(df.loc[i, "frame_idx"])
+        frame_b = int(df.loc[i + 1, "frame_idx"])
+        gap_size = frame_b - frame_a - 1
+
+        if gap_size < 1 or gap_size > max_gap:
+            continue
+
+        x_a, y_a = df.loc[i, "x_pitch"], df.loc[i, "y_pitch"]
+        x_b, y_b = df.loc[i + 1, "x_pitch"], df.loc[i + 1, "y_pitch"]
+
+        for j in range(1, gap_size + 1):
+            t = j / (gap_size + 1)
+            interpolated_rows.append(
+                {
+                    "frame_idx": frame_a + j,
+                    "x_pitch": x_a + t * (x_b - x_a),
+                    "y_pitch": y_a + t * (y_b - y_a),
+                    "interpolated": True,
+                }
+            )
+
+    if interpolated_rows:
+        interp_df = pd.DataFrame(interpolated_rows)
+        df = pd.concat([df, interp_df], ignore_index=True)
+
+    return df.sort_values("frame_idx").reset_index(drop=True)
+
+
+def compute_setpiece_ball_position(
+    ball_detections: pd.DataFrame,
+) -> tuple[float, float]:
+    """Compute set-piece ball position with frame-1 priority logic.
+
+    Args:
+        ball_detections: DataFrame with columns: frame_idx, x_pitch, y_pitch.
+            Ball positions projected to pitch coordinates (after interpolation).
+            Only rows within pitch bounds should be passed.
+
+    Returns:
+        (x_pitch, y_pitch) tuple representing the set-piece ball position.
+
+    Logic:
+        1. If frame_idx == 1 has a valid detection within pitch bounds, use it
+           (resting ball at set-piece start).
+        2. Otherwise, use the median of valid detections in frames 1–5.
+        3. If no valid detections in frames 1–5, use median of all valid detections.
+
+    Raises:
+        ValueError: If ball_detections is empty (no valid detections at all).
+    """
+    if ball_detections.empty:
+        raise ValueError("No valid ball detections to compute set-piece position.")
+
+    # Priority 1: frame_idx == 1
+    frame1 = ball_detections[ball_detections["frame_idx"] == 1]
+    if not frame1.empty:
+        row = frame1.iloc[0]
+        return (float(row["x_pitch"]), float(row["y_pitch"]))
+
+    # Priority 2: median of frames 1–5
+    frames_1_to_5 = ball_detections[ball_detections["frame_idx"].between(1, 5)]
+    if not frames_1_to_5.empty:
+        return (
+            float(frames_1_to_5["x_pitch"].median()),
+            float(frames_1_to_5["y_pitch"].median()),
+        )
+
+    # Priority 3: median of all valid detections
+    return (
+        float(ball_detections["x_pitch"].median()),
+        float(ball_detections["y_pitch"].median()),
+    )
+
+
+def validate_ball_positions(
+    autonomous_df: pd.DataFrame,
+    gt_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compare autonomous ball positions against GT positions.
+
+    Merges autonomous and GT positions on clip_id, computes Euclidean distance
+    error per clip, prints summary statistics, and flags clips with error > 5m.
+
+    Args:
+        autonomous_df: DataFrame with columns: clip_id, x_pitch, y_pitch
+            (autonomous ball positions from the pipeline)
+        gt_df: DataFrame with columns: clip_id, x_pitch, y_pitch
+            (historical GT-derived positions from ball_positions.parquet)
+
+    Returns:
+        DataFrame with columns: clip_id, x_auto, y_auto, x_gt, y_gt,
+        euclidean_error, flagged (True if error > 5m).
+        Summary statistics are printed to stdout.
+    """
+    ERROR_THRESHOLD_M = 5.0
+
+    # Merge on clip_id
+    merged = autonomous_df.merge(
+        gt_df,
+        on="clip_id",
+        suffixes=("_auto", "_gt"),
+    )
+
+    # Rename columns for clarity
+    merged = merged.rename(
+        columns={
+            "x_pitch_auto": "x_auto",
+            "y_pitch_auto": "y_auto",
+            "x_pitch_gt": "x_gt",
+            "y_pitch_gt": "y_gt",
+        }
+    )
+
+    # Compute Euclidean distance error per clip
+    merged["euclidean_error"] = np.sqrt(
+        (merged["x_auto"] - merged["x_gt"]) ** 2
+        + (merged["y_auto"] - merged["y_gt"]) ** 2
+    )
+
+    # Flag clips with error > threshold
+    merged["flagged"] = merged["euclidean_error"] > ERROR_THRESHOLD_M
+
+    # Print summary statistics
+    n_clips = len(merged)
+    n_flagged = int(merged["flagged"].sum())
+    print("=" * 60)
+    print("Ball Position Validation: Autonomous vs GT")
+    print("=" * 60)
+    print(f"  Clips compared:       {n_clips}")
+    print(f"  Mean error (m):       {merged['euclidean_error'].mean():.3f}")
+    print(f"  Median error (m):     {merged['euclidean_error'].median():.3f}")
+    print(f"  Max error (m):        {merged['euclidean_error'].max():.3f}")
+    print(f"  Clips > {ERROR_THRESHOLD_M}m error:   {n_flagged}")
+    print("-" * 60)
+
+    if n_flagged > 0:
+        flagged_clips = merged.loc[merged["flagged"], ["clip_id", "euclidean_error"]]
+        print("  Flagged clips for manual review:")
+        for _, row in flagged_clips.iterrows():
+            print(f"    {row['clip_id']}: {row['euclidean_error']:.3f} m")
+        print("-" * 60)
+
+    return merged[["clip_id", "x_auto", "y_auto", "x_gt", "y_gt", "euclidean_error", "flagged"]]
+
+
 def project_points(H: np.ndarray, pts_xy: np.ndarray) -> np.ndarray:
     if len(pts_xy) == 0:
         return pts_xy
     homo = np.column_stack([pts_xy, np.ones(len(pts_xy))])
     out = (H @ homo.T).T
     return out[:, :2] / out[:, 2:3]
+
+
+def filter_pitch_bounds(coords: np.ndarray) -> np.ndarray:
+    """Drop coordinates outside [0, 105] x [0, 68].
+
+    Parameters
+    ----------
+    coords : np.ndarray
+        Nx2 array of (x, y) pitch coordinates in metres.
+
+    Returns
+    -------
+    np.ndarray
+        Subset of *coords* where x ∈ [0, 105] and y ∈ [0, 68].
+    """
+    if len(coords) == 0:
+        return coords
+    mask = (
+        (coords[:, 0] >= 0)
+        & (coords[:, 0] <= PITCH_LENGTH_M)
+        & (coords[:, 1] >= 0)
+        & (coords[:, 1] <= PITCH_WIDTH_M)
+    )
+    return coords[mask]
 
 
 def load_frame(clip_path: Path, frame_idx: int) -> np.ndarray | None:
@@ -340,6 +675,133 @@ def run_clip(
 
     rows = build_detection_rows(clip, frame_detections, track_team_map)
     return rows, None
+
+
+def run_clip_global(
+    clip: pd.Series,
+    yolo,
+    H_lookup: dict,
+    player_class: int = 0,
+) -> tuple[list[dict], str | None]:
+    """Process one clip using global team assignment (250-frame fitting window).
+
+    Workflow:
+      1. Read frames 1–250 for HSV collection (fitting window).
+      2. For each frame, run detection + tracking and extract jersey HSV per track.
+      3. After all 250 frames: fit global KMeans on accumulated track HSV samples.
+      4. Apply assign_teams_global_consensus() for stable team labels per track.
+      5. Build detection rows ONLY for frames 1–31 (PC computation window).
+      6. Apply the global consensus team labels to those detection rows.
+
+    Args:
+        clip: Series with clip_path, split, clip_id, action_class.
+        yolo: YOLO model instance for player/referee detection.
+        H_lookup: {(split, clip_id, frame_idx): 3x3 homography matrix}.
+        player_class: YOLO class index for players (default 0).
+
+    Returns:
+        (detection_rows, skip_reason_or_None).
+    """
+    clip_path = Path(clip["clip_path"])
+    try:
+        with open(clip_path / "Labels-GameState.json") as f:
+            labels_json = json.load(f)
+    except Exception as e:
+        return [], f"labels: {e}"
+
+    n_frames = len(labels_json["images"])
+
+    # PC computation window: frames 1–31 (centre at 16, ±FRAME_WINDOW)
+    pc_centre = min(FRAME_WINDOW + 1, n_frames)
+    pc_lo = max(1, pc_centre - FRAME_WINDOW)
+    pc_hi = min(n_frames, pc_centre + FRAME_WINDOW)
+
+    # Fitting window: frames 1–250 (or fewer if clip is shorter)
+    fit_hi = min(n_frames, FITTING_WINDOW)
+
+    reset_tracker(yolo)
+
+    # --- Phase 1: Read all fitting frames, collect detections + HSV ---
+    track_hsv_samples: dict[int, list[np.ndarray]] = {}
+    # Store frame detections for the PC window (frames 1–31)
+    pc_frame_detections: list[dict] = []
+    n_homog_fail = 0
+
+    for frame_idx in range(1, fit_hi + 1):
+        image_id = image_id_for_frame(labels_json, frame_idx)
+        if image_id is None:
+            continue
+        frame = load_frame(clip_path, frame_idx)
+        if frame is None:
+            continue
+
+        H = H_lookup.get((clip["split"], clip["clip_id"], frame_idx))
+
+        # Always run tracking to keep ByteTrack state consistent
+        dets, ref_dets = track_frame(yolo, frame, player_class)
+
+        if H is None:
+            n_homog_fail += 1
+        else:
+            # Extract HSV for all player detections in this frame
+            if len(dets) > 0:
+                hsv_batch = np.array(
+                    [jersey_hsv(frame, dets[k, :4]) for k in range(len(dets))]
+                )
+                for k in range(len(dets)):
+                    tid = int(dets[k, 5])
+                    if tid < 0:
+                        continue
+                    if not np.isnan(hsv_batch[k]).any():
+                        track_hsv_samples.setdefault(tid, []).append(hsv_batch[k])
+            else:
+                hsv_batch = np.zeros((0, 3), dtype=np.float32)
+
+            # Store frame data if within PC window
+            if pc_lo <= frame_idx <= pc_hi:
+                pc_frame_detections.append({
+                    "frame_idx": frame_idx,
+                    "image_id": image_id,
+                    "H": H,
+                    "dets": dets,
+                    "hsv_batch": hsv_batch,
+                    "ref_dets": ref_dets,
+                })
+
+    if not pc_frame_detections:
+        return [], f"no valid PC frames (homog_fail={n_homog_fail})"
+
+    # --- Phase 2: Fit global KMeans on accumulated HSV ---
+    _centroids, label_map = fit_global_kmeans(track_hsv_samples)
+
+    # --- Phase 3: Build per-frame label dict for consensus ---
+    # Use the global KMeans label_map to assign each track a label per frame
+    # where it appears. This feeds into consensus to get the mode label.
+    per_frame_labels: dict[int, dict[int, int]] = {}
+    for fd in pc_frame_detections:
+        fi = fd["frame_idx"]
+        frame_map: dict[int, int] = {}
+        dets = fd["dets"]
+        for k in range(len(dets)):
+            tid = int(dets[k, 5])
+            if tid in label_map:
+                frame_map[tid] = label_map[tid]
+        if frame_map:
+            per_frame_labels[fi] = frame_map
+
+    # Also include labels from fitting frames outside PC window for consensus
+    # (the label_map already captures all tracks from the full fitting window)
+
+    # --- Phase 4: Assign teams via global consensus ---
+    if per_frame_labels:
+        consensus_map = assign_teams_global_consensus(per_frame_labels)
+    else:
+        consensus_map = label_map  # fallback to direct label_map
+
+    # --- Phase 5: Build detection rows for PC window only ---
+    rows = build_detection_rows(clip, pc_frame_detections, consensus_map)
+    return rows, None
+
 
 # ---------- Pitch Control (Laurie Shaw / Spearman model) ----------
 

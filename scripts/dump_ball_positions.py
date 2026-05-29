@@ -9,10 +9,16 @@ Caching to parquet lets downstream notebooks run offline (without the SSD mounte
 """
 import json
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Ensure sibling scripts are importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _pipeline_core import verify_ssd_mount
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GSR = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
@@ -21,6 +27,7 @@ PITCH_L, PITCH_W = 105.0, 68.0
 
 
 def main() -> None:
+    verify_ssd_mount()
     pipe = pd.read_parquet(OUT / "detections_soccana_tvcalib.parquet")
     gt = pd.read_parquet(OUT / "detections_gt_full.parquet")
     sources = [pipe[["split", "clip_id", "frame_idx"]],

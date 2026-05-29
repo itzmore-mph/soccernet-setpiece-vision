@@ -32,6 +32,7 @@ from _pipeline_core import (
     discover_setpiece_clips,
     load_tvcalib_lookup,
     run_clip,
+    verify_ssd_mount,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -44,7 +45,7 @@ PLAYER_CLASS = 0
 
 
 def main() -> None:
-    assert GSR_ROOT.exists(), f"SoccerNet GSR not mounted: {GSR_ROOT}"
+    verify_ssd_mount()
     H_lookup = load_tvcalib_lookup(OUTPUTS_DIR)
     print(f"TVCalib H entries: {len(H_lookup)}")
 

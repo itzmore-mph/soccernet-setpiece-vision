@@ -12,12 +12,13 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 Reproducible pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
 
-**Pipeline stages:**
-1. Player + Referee detection — Soccana (YOLOv11n, football-finetuned), classes 0 (Player) and 2 (Referee) in a single pass
-2. Multi-object tracking — ByteTrack for persistent IDs across frames
-3. Team assignment — KMeans on per-track mean HSV jersey colour (players only; referees excluded with `team=-1`)
-4. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography
-5. Pitch Control — Laurie Shaw time-to-intercept model on metric pitch (105 m × 68 m); referees excluded from computation
+**Pipeline stages (single video pass per clip, frames 1–250):**
+1. Player + Referee detection — Soccana (YOLOv11n, football-finetuned), conf=0.25, TTA, agnostic NMS; classes 0 (Player) and 2 (Referee)
+2. Ball detection — Soccana class=1, conf=0.15; gap interpolation up to 5 frames; frame-1 priority for set-piece resting position
+3. Multi-object tracking — ByteTrack for persistent IDs; separate tracker instances for players and ball
+4. Team assignment — global KMeans (k=3) on per-track mean HSV across 250-frame fitting window; cross-frame mode consensus per `track_id`; referees assigned `team=-1`
+5. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography; pitch-bounds filtering [0–105 m × 0–68 m]
+6. Pitch Control — Laurie Shaw time-to-intercept model (zero-velocity, static-frame); 60×40 grid on 105 m × 68 m pitch; frames 1–31 only
 
 **Validation:** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
 
@@ -33,24 +34,28 @@ soccernet-setpiece-vision/
 │   ├── 03_evaluation_and_validation.ipynb
 │   └── 04_visualizations.ipynb
 ├── scripts/                      # Pipeline reproduction scripts
-│   ├── _pipeline_core.py         # Shared module (detection, tracking, PC model)
+│   ├── _pipeline_core.py         # Shared module (detection, tracking, team assignment, PC model)
 │   ├── download_soccernet.py     # Data download (idempotent)
-│   ├── run_tvcalib_batch.py      # Homography computation (requires TVCalib, see note)
-│   ├── run_soccana_tvcalib.py    # Soccana detections under TVCalib H
-│   ├── dump_ball_positions.py    # Cache ball positions from SSD
+│   ├── run_tvcalib_batch.py      # Homography computation (requires TVCalib sibling env)
+│   ├── run_optimized_pipeline.py # Single-pass: detections + ball + team assignment (Fixes 2–4)
 │   ├── dump_gt_setpieces.py      # GT detections for all 33 clips
 │   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
 │   ├── run_pc_gt_full.py         # Pitch control (GT reference)
 │   ├── ks_table_tvcalib.py       # Validation table + figure
+│   ├── compute_icc.py            # ICC(2,1) + effective sample size per PC metric
+│   ├── verify_reproducibility.py # SSD-free: re-derives PC/validation/ICC from parquets
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
-├── outputs/                      # All committed (pipeline runs without the SSD)
-│   ├── *.parquet                 # 10 intermediate + result tables (detections, homographies, pitch control, validation)
+├── tests/                        # pytest unit + property-based tests (hypothesis)
+├── outputs/                      # All committed (analysis runs without the SSD)
+│   ├── *.parquet                 # Detections, homographies, ball positions, PC surfaces, validation, ICC
 │   └── figures/                  # Notebook + validation figures (PNG)
-├── docs/                         # Proposal PDFs/DOCX + design specs
+├── docs/                         # Proposal PDFs/DOCX, design specs, change_ledger.md
+├── .github/workflows/            # CI: reproducibility check on every push
 ├── report.md                     # Thesis source (pandoc → PDF)
-├── requirements.txt              # Direct dependencies with version ranges
-├── requirements.lock             # Fully pinned, platform-aware lockfile (Windows + macOS)
+├── pyproject.toml                # Project metadata + all dependencies (uv)
+├── uv.lock                       # Fully pinned, platform-aware lockfile
+├── .python-version               # Python 3.11
 ├── CITATION.cff
 └── LICENSE
 ```
@@ -59,7 +64,8 @@ soccernet-setpiece-vision/
 
 ## Prerequisites
 
-- **Python 3.11** — install via [Miniconda](https://docs.anaconda.com/miniconda/) or any Python version manager
+- **Python 3.11** — install via any Python version manager
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — fast Python package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
 - **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
@@ -126,7 +132,7 @@ tvcalib/data/segment_localization/train_59.pt
 
 ```bash
 # From soccernet-setpiece-vision/
-python scripts/run_tvcalib_batch.py
+uv run python scripts/run_tvcalib_batch.py
 # Expected: "discovered 33 set-piece clips" → stages frames → runs TVCalib → saves parquet
 ```
 
@@ -139,18 +145,16 @@ Notebook 04 requires SSD (broadcast frames) for its visualizations — skip or r
 
 ```bash
 # 1. Install dependencies (Python 3.11 required)
-pip install -r requirements.txt          # version ranges, simple
-# or, for an exact reproducible environment (Windows + macOS):
-# pip install -r requirements.lock        # fully pinned, platform-aware
+uv sync
 
 # 2. Run analysis notebooks (order matters)
-jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
-jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+uv run uv run jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
+uv run uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
 # nb04 requires SSD — run interactively or only if SSD is mounted:
-jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
+uv run uv run jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
 
 # 3. Run validation table (from committed pipeline outputs)
-python scripts/ks_table_tvcalib.py
+uv run python scripts/ks_table_tvcalib.py
 ```
 
 Or open each notebook in JupyterLab / VS Code and run interactively.
@@ -164,17 +168,10 @@ Reproduces all results end-to-end from the SoccerNet GSR video clips.
 ### 1. Environment setup
 
 ```bash
-conda create -n py311-dev python=3.11 -y
-conda activate py311-dev
-pip install -r requirements.txt          # version ranges
-# or, for an exact reproducible environment: pip install -r requirements.lock
+uv sync
 ```
 
-`requirements.lock` is a fully pinned, platform-aware lockfile (generated with
-`uv pip compile requirements.txt -o requirements.lock --universal --python-version 3.11`).
-It resolves identically on Windows and macOS; OS-specific wheels (e.g. Apple-Silicon
-`torch`/`hf-xet`, Windows `pywinpty`) are selected automatically via environment markers.
-Regenerate it whenever `requirements.txt` changes.
+This installs all dependencies from `pyproject.toml` into a managed `.venv` using the pinned `uv.lock` lockfile. The lockfile resolves identically on Windows and macOS; OS-specific wheels (e.g. Apple-Silicon `torch`/`hf-xet`, Windows `pywinpty`) are selected automatically via environment markers.
 
 ### 2. Configure data paths
 
@@ -188,13 +185,13 @@ SOCCERNET_LOCAL_DIR=/Volumes/MPH-ExternalStorage/soccernet-gsr
 ### 3. Download SoccerNet GSR data
 
 ```bash
-python scripts/download_soccernet.py
+uv run python scripts/download_soccernet.py
 ```
 
 ### 4. Run notebook 01 — Business & Data Understanding
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
 ```
 
 Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`.
@@ -204,7 +201,7 @@ Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`.
 ```bash
 # Stages frames 1–31 per clip into /tmp, runs TVCalib (~15 min, SSD required)
 # Requires TVCalib set up in ../tvcalib/ — see scripts/run_tvcalib_batch.py docstring
-python scripts/run_tvcalib_batch.py
+uv run python scripts/run_tvcalib_batch.py
 ```
 
 Produces: `outputs/homographies_tvcalib.parquet`. Skip this step if you want to use the committed pre-computed homographies.
@@ -212,37 +209,38 @@ Produces: `outputs/homographies_tvcalib.parquet`. Skip this step if you want to 
 ### 6. Run the pipeline (Soccana + TVCalib)
 
 ```bash
-# Soccana detector + ByteTrack + team assignment (~30 min, SSD required)
-python scripts/run_soccana_tvcalib.py
+# Single-pass: player detection, ball detection, team assignment (~30 min, SSD required)
+# Outputs: detections_soccana_tvcalib.parquet + ball_positions.parquet
+uv run python scripts/run_optimized_pipeline.py
 
-# GT detections must run before ball positions (ball positions reads both parquets)
-python scripts/dump_gt_setpieces.py
-python scripts/dump_ball_positions.py
+# GT detections (no SSD needed after this point)
+uv run python scripts/dump_gt_setpieces.py
 
-# Compute pitch control surfaces (SSD-free from here)
-python scripts/run_pc_soccana_tvcalib.py
-python scripts/run_pc_gt_full.py
+# Compute pitch control surfaces
+uv run python scripts/run_pc_soccana_tvcalib.py
+uv run python scripts/run_pc_gt_full.py
 
-# Generate validation table
-python scripts/ks_table_tvcalib.py
+# Generate validation table + ICC
+uv run python scripts/ks_table_tvcalib.py
+uv run python scripts/compute_icc.py
 ```
 
 ### 7. Run notebook 02 — Pitch Control
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
 ```
 
 ### 8. Run notebook 03 — Evaluation & Validation
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
 ```
 
 ### 9. Run notebook 04 — Visualizations
 
 ```bash
-jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
 ```
 
 Requires SSD (reads broadcast frames for overlays).
@@ -250,8 +248,33 @@ Requires SSD (reads broadcast frames for overlays).
 ### 10. (Optional) Render annotated broadcast clips
 
 ```bash
-python scripts/render_annotated_clips.py
-python scripts/render_pc_overlay.py
+uv run python scripts/render_annotated_clips.py
+uv run python scripts/render_pc_overlay.py
+```
+
+---
+
+## Reproducibility
+
+This project supports two levels of reproducibility:
+
+### Level 1: From Committed Parquets (No SSD Required)
+
+All statistical analysis, Pitch Control computation, validation statistics, ICC values, and figures reproduce identically from the committed Parquet files. This is verified automatically by CI on every push.
+
+```bash
+uv run python scripts/verify_reproducibility.py
+```
+
+### Level 2: Full End-to-End (SSD Required)
+
+Complete reproduction from raw SoccerNet GSR video frames requires the external SSD mounted at the path specified in `.env`. This regenerates all intermediate parquets (detections, ball positions) and produces identical outputs to the committed versions.
+
+```bash
+uv run python scripts/run_optimized_pipeline.py
+uv run python scripts/run_pc_soccana_tvcalib.py
+uv run python scripts/ks_table_tvcalib.py
+uv run python scripts/compute_icc.py
 ```
 
 ---

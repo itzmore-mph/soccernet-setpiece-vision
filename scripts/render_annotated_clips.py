@@ -14,11 +14,17 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pandas as pd
+
+# Ensure sibling scripts are importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _pipeline_core import verify_ssd_mount
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -29,10 +35,11 @@ GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/s
 TEAM_COLORS = {
     0: (220, 120, 20),   # blue team
     1: (20, 40, 220),    # red team
+    2: (30, 130, 255),   # third cluster (often referees/outliers)
     -1: (100, 100, 100), # unassigned
 }
 REFEREE_COLOR = (30, 130, 255)  # orange
-TEAM_NAMES = {0: "Team A", 1: "Team B", -1: "?"}
+TEAM_NAMES = {0: "Team A", 1: "Team B", 2: "Other", -1: "?"}
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 FPS = 8
 
@@ -191,7 +198,7 @@ def main() -> None:
         clip_ids = sorted(df["clip_id"].unique())
 
     print(f"Clips to render: {len(clip_ids)}")
-    assert GSR_ROOT.exists(), f"SoccerNet GSR not mounted: {GSR_ROOT}"
+    verify_ssd_mount()
 
     for clip_id in clip_ids:
         clip_dets = df[df["clip_id"] == clip_id]

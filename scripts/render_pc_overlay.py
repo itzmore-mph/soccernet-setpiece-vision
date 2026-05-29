@@ -37,6 +37,7 @@ from _pipeline_core import (
     PITCH_WIDTH_M,
     pitch_control_surface,
     split_attack_defend,
+    verify_ssd_mount,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -274,9 +275,16 @@ def render_clip(
 
         # Get detections and ball for this frame
         f_dets = dets[dets["frame_idx"] == fi]
-        ball_row = balls[(balls["clip_id"] == clip_id) & (balls["frame_idx"] == fi)]
-        ball_x = float(ball_row["ball_x_m"].iloc[0]) if not ball_row.empty and ball_row["ball_x_m"].notna().any() else None
-        ball_y = float(ball_row["ball_y_m"].iloc[0]) if ball_x is not None else None
+        # ball_positions.parquet has one row per clip with set-piece position
+        ball_row = balls[balls["clip_id"] == clip_id]
+        if not ball_row.empty:
+            x_col = "ball_x_m" if "ball_x_m" in ball_row.columns else "x_pitch"
+            y_col = "ball_y_m" if "ball_y_m" in ball_row.columns else "y_pitch"
+            ball_x = float(ball_row[x_col].iloc[0]) if ball_row[x_col].notna().any() else None
+            ball_y = float(ball_row[y_col].iloc[0]) if ball_x is not None else None
+        else:
+            ball_x = None
+            ball_y = None
 
         # Compute pitch control
         if not f_dets.empty and ball_x is not None:
@@ -333,7 +341,7 @@ def main() -> None:
     parser.add_argument("--clip", default=None, help="Single clip ID, e.g. SNGS-066")
     args = parser.parse_args()
 
-    assert GSR_ROOT.exists(), f"SoccerNet GSR not mounted: {GSR_ROOT}"
+    verify_ssd_mount()
 
     print("Loading data...")
     dets = pd.read_parquet(OUTPUTS_DIR / "detections_soccana_tvcalib.parquet")

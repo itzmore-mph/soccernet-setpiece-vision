@@ -10,9 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+# Ensure sibling scripts are importable
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _pipeline_core import verify_ssd_mount
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -25,6 +31,7 @@ PITCH_W = 68.0
 
 
 def main():
+    verify_ssd_mount()
     rows = []
     n_clips = 0
     for split in SPLITS:
