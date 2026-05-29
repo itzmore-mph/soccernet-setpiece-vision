@@ -183,14 +183,14 @@ def main() -> None:
 
     parquet_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
     if not parquet_path.is_file():
-        raise FileNotFoundError(f"parquet not found: {parquet_path}\nRun scripts/run_soccana_tvcalib.py first.")
+        raise FileNotFoundError(f"parquet not found: {parquet_path}\nRun scripts/run_optimized_pipeline.py first.")
 
     df = pd.read_parquet(parquet_path)
 
     required = {"x1_px", "y1_px", "x2_px", "y2_px"}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"parquet missing pixel bbox columns {missing}.\nRe-run run_soccana_tvcalib.py to regenerate.")
+        raise ValueError(f"parquet missing pixel bbox columns {missing}.\nRe-run run_optimized_pipeline.py to regenerate.")
 
     if args.clip:
         clip_ids = [args.clip]

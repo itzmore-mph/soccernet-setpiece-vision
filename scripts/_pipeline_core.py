@@ -1,6 +1,6 @@
 """Shared helpers for the pipeline scripts.
 
-Used by run_soccana_tvcalib.py, run_pc_soccana_tvcalib.py, run_pc_gt_full.py, etc.
+Used by run_optimized_pipeline.py, run_pc_soccana_tvcalib.py, run_pc_gt_full.py, etc.
 Do not import directly from notebooks.
 """
 from __future__ import annotations
