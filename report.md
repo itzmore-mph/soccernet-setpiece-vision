@@ -207,9 +207,9 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 2. **TVCalib batch complete** (W4): 1,023 homographies computed for all 33 clips, removing GT pitch-line dependency at inference.
 3. **`action_position` data-quality discovery** (W4–W5): mid-project finding that `action_position` is a global broadcast frame number, not a clip-local index. Required rewriting the frame-window logic before modelling could produce correct outputs.
 4. **First end-to-end pipeline run** (W6): pipeline runs all 33 clips end-to-end with zero homography failures.
-5. **Validation cohort frozen at 31 clips** (W7): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window.
+5. **Validation cohort frozen at 31 clips** (W7): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window. After autonomous ball detection (Fix 4), the optimized cohort is 22 clips (67% coverage); the 11 additional excluded clips lack sufficient autonomous ball detections in the critical early frames.
 6. **KS validation table complete** (W8): per-metric distributional comparison published with no selective reporting.
-7. **Three-way error taxonomy identified** (W8–W9): the partition into calibrated, underestimated, and inverted metrics emerges from the paired analysis.
+7. **Four-way error taxonomy identified** (W8–W9): the partition into global underestimation, moderate underestimation, sign inversion, and previously calibrated metrics emerges from the paired analysis.
 8. **Final deliverables ready** (W11): committed Parquet outputs, executable notebooks, thesis report, and overlay visualizations.
 
 ### 4.4 Constraints and Dependencies
@@ -525,7 +525,9 @@ Ball position is now detected autonomously from broadcast video, removing the de
 
 ![Figure 11: Per-frame paired scatter plots, pipeline vs GT, for each Pitch Control metric.](outputs/figures/09_paired_scatter.png)
 
-Pearson r values are lower than in the original pipeline, likely due to the different clip composition (22 vs 31 clips) and the shift from GT to autonomous ball positions. The key improvement is in bias: `pc_mean` bias reduced from −0.148 to −0.036 (76% improvement), and `pc_area_gt_0p5` bias reduced from −0.155 to −0.039 (75% improvement).
+Pearson r values are lower than in the original pipeline, likely due to the different clip composition (22 vs 31 clips) and the shift from GT to autonomous ball positions. We cannot fully separate cohort effects from method effects with this design; a future ablation running both v1 and v2 settings on the same 22-clip subset would isolate the contributions. For the present validation, per-frame correlation should be interpreted as a relative population-level signal rather than a per-delivery predictor. The key improvement is in bias: `pc_mean` bias reduced from −0.148 to −0.036 (76% improvement), and `pc_area_gt_0p5` bias reduced from −0.155 to −0.039 (75% improvement).
+
+Spearman rank correlation is not reported here because the compressed score distributions at the set-piece moment (both pipeline and GT cluster tightly around their means) render rank-based correlation uninformative; Pearson r captures the linear-agreement signal more cleanly in this regime.
 
 #### ICC and Effective Sample Size
 
@@ -535,13 +537,13 @@ Within-clip correlation was quantified using ICC(2,1) (Intraclass Correlation Co
 
 | Metric | ICC(2,1) | 95% CI Lower | 95% CI Upper | n_eff |
 |---|:---:|:---:|:---:|:---:|
-| pc_mean | 0.868 | 0.78 | 0.94 | 0.81 |
-| pc_at_ball | 0.918 | 0.86 | 0.96 | 0.77 |
-| pc_in_box | 0.865 | 0.77 | 0.94 | 0.82 |
-| pc_in_third | 0.836 | 0.73 | 0.93 | 0.84 |
-| pc_area_gt_0p5 | 0.834 | 0.73 | 0.92 | 0.85 |
+| pc_mean | 0.868 | 0.78 | 0.94 | 25.23 |
+| pc_at_ball | 0.918 | 0.86 | 0.96 | 23.90 |
+| pc_in_box | 0.865 | 0.77 | 0.94 | 25.31 |
+| pc_in_third | 0.836 | 0.73 | 0.93 | 26.13 |
+| pc_area_gt_0p5 | 0.834 | 0.73 | 0.92 | 26.21 |
 
-All metrics show ICC values in the range 0.83–0.92, indicating strong within-clip correlation. The effective sample sizes (n_eff = n / (1 + (m−1) × ICC), where n=22 clips and m=31 frames) range from 0.77 to 0.85, meaning the effective independent sample count is less than one clip equivalent per metric. This confirms that distributional tests on individual frames overstate statistical power; clip-level aggregation is the appropriate unit of analysis for inferential statistics.
+All metrics show ICC values in the range 0.83–0.92, indicating strong within-clip correlation. With N_total = 674 paired frames, mean cluster size m_avg = 30.64 frames per clip, and ICC ≈ 0.85, the design effect is approximately 26.5. Effective sample sizes (n_eff = N_total / (1 + (m_avg − 1) × ICC)) range from 23.90 to 26.21 across metrics, meaning the 674 nominal paired frames have the statistical power of approximately 24–26 truly independent observations, roughly one effective observation per clip. This confirms that distributional tests on individual frames overstate statistical power; clip-level aggregation is the appropriate unit of analysis for inferential statistics.
 
 ![Figure 11b: ICC(2,1) values and effective sample sizes per Pitch Control metric. Dashed lines at ICC=0.50 and ICC=0.75 mark moderate and good reliability thresholds.](outputs/figures/icc_effective_sample_size.png)
 
@@ -634,7 +636,7 @@ The frame-1 priority logic is motivated by set-piece physics: at the moment of a
 
 Fix 1 introduced ICC(2,1) computation via Pingouin to quantify within-clip frame correlation. All five PC metrics show high ICC values (0.83–0.92), indicating that frames within the same clip are strongly correlated, as expected for a 31-frame window of a near-static set-piece formation.
 
-The practical consequence is severe: effective sample sizes range from 0.77 to 0.85 across metrics (`pc_at_ball` = 0.77, `pc_mean` = 0.81, `pc_in_box` = 0.82, `pc_in_third` = 0.84, `pc_area_gt_0p5` = 0.85). These values indicate strong frame-to-frame dependence: each clip contributes less than one effective independent observation to the validation. With 22 clips and n_eff < 1.0, the validation cohort provides approximately 17–19 effective independent observations across metrics.
+The practical consequence is that the 674 nominal paired frames have the statistical power of approximately 24–26 truly independent observations. Effective sample sizes are: `pc_at_ball` = 23.90, `pc_mean` = 25.23, `pc_in_box` = 25.31, `pc_in_third` = 26.13, `pc_area_gt_0p5` = 26.21. These values reflect strong frame-to-frame dependence (each clip's 31 frames contribute roughly one effective independent observation), consistent with the near-static set-piece formation window. With ICC values of 0.83–0.92 and m_avg = 30.64, the design effect is approximately 25–27, reducing the effective sample size to roughly one observation per clip.
 
 This finding does not invalidate the bias estimates (which are point estimates regardless of sample size), but it means that confidence intervals on those estimates are wide and that no distributional test (KS or otherwise) has adequate power to detect anything short of large distributional shifts. The ICC(2,1) formulation specifically quantifies the agreement between frames (raters) within clips (targets), making it the appropriate measure for this nested data structure. The implication for future work is clear: expanding the clip cohort is the single most impactful action for statistical power, more so than any algorithmic improvement.
 
@@ -666,7 +668,7 @@ The two-level structure separates concerns: Level 1 confirms that all analysis a
 
 - **Autonomous ball detection coverage:** 22/33 clips (67%). The 11 uncovered clips cannot be processed without GT annotations or an alternative ball-position source.
 - **TVCalib error propagation:** TVCalib (Theiner & Ewerth, 2023) introduces reprojection errors of several centimetres to low single-digit metres depending on pitch region and broadcast angle. These propagate directly into player coordinates and modestly affect all PC metrics. Quantifying this error channel is reserved for future work.
-- **Cohort size and effective sample size:** With ICC values of 0.83–0.92 and n_eff < 1.0, the 22-clip cohort provides limited statistical power. Conclusions should not be generalised beyond this cohort or to broadcast conditions substantially different from SoccerNet GSR (Somers et al., 2024).
+- **Cohort size and effective sample size:** With ICC values of 0.83–0.92 and design effects of 25–27, the 22-clip cohort provides approximately 24–26 effective independent observations. Conclusions should not be generalised beyond this cohort or to broadcast conditions substantially different from SoccerNet GSR (Somers et al., 2024).
 - **Static-frame assumption:** Zero-velocity TTI (Shaw, 2020) is appropriate for set-piece snapshots but does not extend to open play. Players may already be in motion at execution; zero-velocity understates the spatial advantage of players already running toward the ball.
 - **Per-frame identity ambiguity:** Pipeline track IDs are not matched to GT player IDs; team assignment accuracy is assessed implicitly via distributional validation rather than by direct track matching.
 - **Clip composition change:** The shift from 31 clips (GT ball) to 22 clips (autonomous ball) means the validation cohort changed between the original and optimized pipelines. Direct comparison of metrics across the two cohorts should be interpreted with this caveat.
@@ -699,7 +701,7 @@ This project set out to answer a single practical question: can a broadcast-vide
 
 The development process surfaced a significant data-quality issue in SoccerNet GSR (Somers et al., 2024): the `action_position` field is a global broadcast frame number, not a clip-local index, causing the entire pipeline to operate on end-of-clip open-play frames rather than set-piece formations until the bug was identified and fixed. This mid-project discovery and correction illustrates the importance of data validation as an active rather than passive phase of CRISP-DM (Chapman et al., 2000), and is documented here both as a methodological lesson and as a contribution to future users of this dataset.
 
-The subsequent optimization effort (Fixes 0–7) addressed the three error regimes identified in the initial analysis: global underestimation was largely resolved through improved detector recall (75% bias reduction on `pc_mean`); box inversion was partially improved through global team assignment (19% bias reduction on `pc_in_box`); and the pipeline achieved full autonomy through autonomous ball detection, removing the last GT dependency. ICC analysis revealed that within-clip correlation is high (0.83–0.92), meaning effective sample sizes are below 1.0 and cohort expansion is the binding constraint on statistical power.
+The subsequent optimization effort (Fixes 0–7) addressed the three error regimes identified in the initial analysis: global underestimation was largely resolved through improved detector recall (75% bias reduction on `pc_mean`); box inversion was partially improved through global team assignment (19% bias reduction on `pc_in_box`); and the pipeline achieved full autonomy through autonomous ball detection, removing the last GT dependency. ICC analysis revealed that within-clip correlation is high (0.83–0.92), with design effects of 25–27 that reduce 674 nominal paired frames to approximately 24–26 effective independent observations; cohort expansion is the binding constraint on statistical power.
 
 ### 9.2 Core Conclusions
 
@@ -707,7 +709,7 @@ The subsequent optimization effort (Fixes 0–7) addressed the three error regim
 2. **Pipeline optimization substantially reduced bias:** `pc_mean` bias improved from −0.148 to −0.037 (75% reduction); `pc_area_gt_0p5` from −0.155 to −0.044 (72% reduction); `pc_in_box` from +0.216 to +0.176 (19% reduction, sign inversion persists).
 3. **TVCalib autonomous calibration** (Theiner & Ewerth, 2023) enables fully autonomous camera-to-pitch projection: 33/33 clips processed, zero homography failures, no GT pitch-line annotations consumed.
 4. **Autonomous ball detection** (Fix 4) removes the GT ball-position dependency for 22/33 clips (67% coverage), making the pipeline fully self-contained for covered clips.
-5. **ICC analysis reveals within-clip correlation** of 0.83–0.92 across all metrics, with effective sample sizes (n_eff) of 0.77–0.85. Cohort expansion is the binding constraint on statistical power.
+5. **ICC analysis reveals within-clip correlation** of 0.83–0.92 across all metrics, with effective sample sizes (n_eff) of 23.90–26.21 (approximately one effective observation per clip). Cohort expansion is the binding constraint on statistical power.
 6. **Detection recall closed the gap:** Mean players per frame increased from 15.99 to 20.29 (now exceeding GT 18.69), eliminating the systematic defender shortfall that drove global underestimation.
 7. **The pipeline is fully reproducible** on consumer hardware (~30 min on Apple Silicon MPS, no cloud). Two-level reproducibility: Level 1 from committed parquets (CI-verified), Level 2 from raw video (SSD required).
 8. **`pc_in_box` sign inversion persists** despite global team assignment: colour-based team classification has a structural ceiling in crowded penalty areas, requiring a fundamentally different approach (supervised classifier or re-identification).
@@ -735,7 +737,7 @@ Package as a CLI tool with Docker support. Add optical flow for velocity estimat
 
 ### 9.5 Academic and Practical Contribution
 
-**Academic contribution.** This project demonstrates a distributional validation of a broadcast-only Pitch Control pipeline against open ground-truth annotations (Somers et al., 2024), including a systematic optimization effort that reduced global bias by 72–75%. The contribution is not a new model; the time-to-intercept pitch-control formulation is established (Spearman, 2018; Fernández & Bornn, 2018; Shaw, 2020). The contribution is a validated evidence base for which summary metrics survive the broadcast-to-GT gap, how specific pipeline improvements map to bias reduction, and how ICC-based effective sample size analysis reveals the binding constraint on statistical power. The three-way error taxonomy (global underestimation, box inversion, calibrated third) provides a reusable framework for evaluating future broadcast CV pipelines that compute spatial tactical metrics. The `action_position` data-quality finding contributes a documented correction to the SoccerNet GSR dataset for future users.
+**Academic contribution.** This project demonstrates a distributional validation of a broadcast-only Pitch Control pipeline against open ground-truth annotations (Somers et al., 2024), including a systematic optimization effort that reduced global bias by 72–75%. The contribution is not a new model; the time-to-intercept pitch-control formulation is established (Spearman, 2018; Fernández & Bornn, 2018; Shaw, 2020). The contribution is a validated evidence base for which summary metrics survive the broadcast-to-GT gap, how specific pipeline improvements map to bias reduction, and how ICC-based effective sample size analysis reveals the binding constraint on statistical power. The four-way error taxonomy (global underestimation, moderate underestimation, sign inversion, previously calibrated) provides a reusable framework for evaluating future broadcast CV pipelines that compute spatial tactical metrics. The `action_position` data-quality finding contributes a documented correction to the SoccerNet GSR dataset for future users.
 
 **Practical contribution.** The pipeline is fully open-source, runs on consumer hardware in 30 minutes, and requires no proprietary tracking hardware or GT annotations at inference time for 22/33 clips. It delivers `pc_at_ball` (bias = −0.039, overlap = 0.889) and `pc_mean` (bias = −0.037) as calibrated, deployment-ready Pitch Control metrics to any club or analyst with broadcast footage and a laptop. The animated broadcast-overlay visualizations provide an interpretable output layer that does not require a data scientist to consume. Two-level reproducibility (CI-verified from parquets; full from raw video) ensures independent verification.
 

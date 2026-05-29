@@ -36,8 +36,6 @@ def compute_icc_per_metric(df: pd.DataFrame) -> pd.DataFrame:
         Results with columns: metric, icc_value, ci_lower, ci_upper, n_eff.
     """
     n_clips = df["clip_id"].nunique()
-    # Use median frame count as m (most clips have 31 frames)
-    n_frames = int(df.groupby("clip_id")["frame_idx"].nunique().median())
 
     results = []
     for metric in PC_METRICS:
@@ -58,9 +56,11 @@ def compute_icc_per_metric(df: pd.DataFrame) -> pd.DataFrame:
         ci_lower = icc_row["CI95"][0]
         ci_upper = icc_row["CI95"][1]
 
-        # Compute effective sample size: n_eff = n / (1 + (m - 1) * ICC)
-        # n = number of clips, m = number of frames per clip
-        n_eff = n_clips / (1 + (n_frames - 1) * icc_value)
+        # Standard design-effect formula: DEFF = 1 + (m_avg - 1) * ICC
+        # n_eff = N_total / DEFF, where N_total = total paired frame observations
+        N_total = len(long_df)
+        m_avg = N_total / n_clips
+        n_eff = N_total / (1 + (m_avg - 1) * icc_value)
 
         results.append(
             {
@@ -156,7 +156,10 @@ def main() -> None:
     """Main entry point: read data, compute ICC, save results."""
     print(f"Reading pitch control data from {INPUT_PATH}")
     df = pd.read_parquet(INPUT_PATH)
-    print(f"  Shape: {df.shape} | Clips: {df['clip_id'].nunique()} | Frames/clip (median): {int(df.groupby('clip_id')['frame_idx'].nunique().median())}")
+    n_clips = df["clip_id"].nunique()
+    N_total = len(df)
+    m_avg = N_total / n_clips
+    print(f"  Shape: {df.shape} | Clips: {n_clips} | N_total frames: {N_total} | m_avg: {m_avg:.2f}")
 
     print("\nComputing ICC(2,1) per metric...")
     results = compute_icc_per_metric(df)
