@@ -76,17 +76,45 @@ def main():
     print()
     print(df[cols].round(4).to_string(index=False))
 
+    # Human-readable column headers and metric names for the figure
+    col_display = {
+        "metric": "Metric",
+        "mean": "Mean (pipe)",
+        "mean_gt": "Mean (GT)",
+        "delta": "Δ Mean",
+        "ks_stat": "KS stat",
+        "ks_p": "KS p-val",
+        "hist_overlap": "Hist overlap",
+        "passes_ks": "Passes KS",
+    }
+    metric_display = {
+        "pc_mean": "PC Mean",
+        "pc_at_ball": "PC at Ball",
+        "pc_in_box": "PC in Box",
+        "pc_in_third": "PC in Third",
+        "pc_area_gt_0p5": "PC Area > 0.5",
+    }
+
     # Render table figure
-    fig, ax = plt.subplots(figsize=(11, 0.45 * len(df) + 1.4))
+    display_df = df[cols].round(3).copy()
+    display_df["metric"] = display_df["metric"].map(metric_display).fillna(display_df["metric"])
+    display_df["passes_ks"] = display_df["passes_ks"].map({"True": "Yes", "False": "No", True: "Yes", False: "No"})
+    col_labels = [col_display[c] for c in cols]
+
+    fig, ax = plt.subplots(figsize=(11, 0.5 * len(df) + 1.0))
     ax.axis("off")
-    cell = df[cols].round(3).astype(str).values
-    table = ax.table(cellText=cell, colLabels=cols, loc="center", cellLoc="center")
+    table = ax.table(
+        cellText=display_df.astype(str).values,
+        colLabels=col_labels,
+        loc="center",
+        cellLoc="center",
+    )
     table.auto_set_font_size(False)
-    table.set_fontsize(9)
-    table.scale(1.0, 1.4)
+    table.set_fontsize(10)
+    table.scale(1.0, 1.5)
     ax.set_title(
-        f"Soccana + TVCalib vs GT (33 clips, KS alpha={KS_ALPHA})",
-        fontsize=11, pad=12,
+        f"Soccana + TVCalib vs GT  (n=33 clips, KS α={KS_ALPHA})",
+        fontsize=12, pad=10, fontweight="bold",
     )
     out_fig = FIGURES_DIR / "14_ks_table_tvcalib.png"
     fig.savefig(out_fig, dpi=150, bbox_inches="tight")

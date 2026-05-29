@@ -543,6 +543,8 @@ Within-clip correlation was quantified using ICC(2,1) (Intraclass Correlation Co
 
 All metrics show ICC values in the range 0.83–0.92, indicating strong within-clip correlation. The effective sample sizes (n_eff = n / (1 + (m−1) × ICC), where n=22 clips and m=31 frames) range from 0.77 to 0.85, meaning the effective independent sample count is less than one clip equivalent per metric. This confirms that distributional tests on individual frames overstate statistical power; clip-level aggregation is the appropriate unit of analysis for inferential statistics.
 
+![Figure 11b: ICC(2,1) values and effective sample sizes per Pitch Control metric. Dashed lines at ICC=0.50 and ICC=0.75 mark moderate and good reliability thresholds.](outputs/figures/icc_effective_sample_size.png)
+
 **Bias diagnosis:** The five metrics divide into three groups by error type.
 
 *Reduced global underestimation* (`pc_mean`, `pc_area_gt_0p5`, `pc_at_ball`): With the optimized detector (conf=0.25, TTA, agnostic NMS), the pipeline now detects 20.29 mean players per frame vs GT 18.69, closing the previous detection shortfall. The defender gap is reduced (pipeline 7.96 vs GT 9.13) though not eliminated. Bias on `pc_mean` improved from −0.148 to −0.037 (75% reduction); bias on `pc_area_gt_0p5` improved from −0.155 to −0.044 (72% reduction). The residual underestimation reflects the remaining defender shortfall under the Shaw (2020) model.
@@ -787,8 +789,6 @@ soccernet-setpiece-vision/
         download_soccernet.py
         run_tvcalib_batch.py
         run_optimized_pipeline.py      ← single video pass (Fixes 2+3+4)
-        run_soccana_tvcalib.py         ← legacy (superseded)
-        dump_ball_positions.py         ← legacy (superseded by autonomous detection)
         dump_gt_setpieces.py
         run_pc_soccana_tvcalib.py
         run_pc_gt_full.py

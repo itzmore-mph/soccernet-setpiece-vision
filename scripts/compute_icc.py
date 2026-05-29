@@ -93,8 +93,14 @@ def plot_icc_figure(results: pd.DataFrame, output_path: Path) -> None:
     xerr_upper = df["ci_upper"] - df["icc_value"]
     xerr = [xerr_lower.values, xerr_upper.values]
 
-    # Clean metric names for display
-    labels = df["metric"].str.replace("pc_", "").str.replace("_", " ").str.title()
+    metric_labels = {
+        "pc_mean": "PC Mean",
+        "pc_at_ball": "PC at Ball",
+        "pc_in_box": "PC in Box",
+        "pc_in_third": "PC in Third",
+        "pc_area_gt_0p5": "PC Area > 0.5",
+    }
+    labels = df["metric"].map(metric_labels).fillna(df["metric"])
 
     fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -119,7 +125,7 @@ def plot_icc_figure(results: pd.DataFrame, output_path: Path) -> None:
         ax.text(
             ci_hi + 0.02,
             i,
-            f"n_eff = {n_eff:.1f}",
+            f"n_eff = {n_eff:.2f}",
             va="center",
             ha="left",
             fontsize=9,
@@ -129,9 +135,9 @@ def plot_icc_figure(results: pd.DataFrame, output_path: Path) -> None:
     # Formatting
     ax.set_yticks(list(y_pos))
     ax.set_yticklabels(labels, fontsize=10)
-    ax.set_xlabel("ICC(2,1) Value", fontsize=11)
+    ax.set_xlabel("ICC(2,1)", fontsize=11)
     ax.set_title("Intraclass Correlation & Effective Sample Size per Metric", fontsize=12, pad=10)
-    ax.set_xlim(0, min(1.0, df["ci_upper"].max() + 0.15))
+    ax.set_xlim(0, min(1.05, df["ci_upper"].max() + 0.18))
     ax.axvline(x=0.75, color="#999999", linestyle="--", linewidth=0.8, alpha=0.7)
     ax.axvline(x=0.50, color="#cccccc", linestyle="--", linewidth=0.8, alpha=0.5)
 
