@@ -3,10 +3,6 @@ title: "Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-P
 author: "Moritz Philipp Haaf"
 date: "30 June 2026"
 subject: "Master in Artificial Intelligence Applied to Sports - Master's Final Project"
-toc: true
-toc-depth: 2
-numbersections: false
-geometry: margin=2.5cm
 ---
 
 # Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis
@@ -33,8 +29,6 @@ MSc AI Applied to Sports · Sports Data Campus
 9. Conclusions and Future Work
 10. Bibliography
 11. Appendices
-
-*(When rendered to PDF via pandoc with `toc: true`, a paginated table of contents is produced automatically; the list above is provided for direct readers of the markdown source.)*
 
 ---
 
@@ -107,7 +101,7 @@ A reproducible, validated pipeline from broadcast video to Pitch Control, with:
 
 **Set-piece scope.** Only corners and direct free kicks are analysed. These were selected because the broadcast camera is near-static for both, all relevant players are in frame at the moment of execution, and ball position is reliably annotatable. Throw-ins, goal kicks, indirect free kicks, and open-play sequences are out of scope.
 
-**Out of scope.** Player re-identification across clips, multi-camera setups, non-broadcast (e.g., tactical camera) footage, and tracking over full match sequences are all excluded. The pipeline is validated as a static-frame set-piece tool, not a real-time tracking system. Note: autonomous ball detection, originally out of scope, was subsequently implemented as part of the pipeline optimization effort (Fix 4) and is now integrated into the production pipeline.
+**Out of scope.** Player re-identification across clips, multi-camera setups, non-broadcast (e.g., tactical camera) footage, and tracking over full match sequences are all excluded. The pipeline is validated as a static-frame set-piece tool, not a real-time tracking system. Note: autonomous ball detection, originally out of scope, was subsequently implemented during the pipeline optimization phase and is now integrated into the production pipeline.
 
 ### 2.7 Research Structure and Preview
 
@@ -207,7 +201,7 @@ The project follows CRISP-DM's phased structure, with explicit feedback loops be
 2. **TVCalib batch complete** (W4): 1,023 homographies computed for all 33 clips, removing GT pitch-line dependency at inference.
 3. **`action_position` data-quality discovery** (W4–W5): mid-project finding that `action_position` is a global broadcast frame number, not a clip-local index. Required rewriting the frame-window logic before modelling could produce correct outputs.
 4. **First end-to-end pipeline run** (W6): pipeline runs all 33 clips end-to-end with zero homography failures.
-5. **Validation cohort frozen at 31 clips** (W7): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window. After autonomous ball detection (Fix 4), the optimized cohort is 22 clips (67% coverage); the 11 additional excluded clips lack sufficient autonomous ball detections in the critical early frames.
+5. **Validation cohort frozen at 31 clips** (W7): SNGS-125 and SNGS-145 excluded from the PC phase due to missing ball annotations in the window. After integrating autonomous ball detection, the optimized cohort is 22 clips (67% coverage); the 11 additional excluded clips lack sufficient autonomous ball detections in the critical early frames.
 6. **KS validation table complete** (W8): per-metric distributional comparison published with no selective reporting.
 7. **Four-way error taxonomy identified** (W8–W9): the partition into global underestimation, moderate underestimation, sign inversion, and previously calibrated metrics emerges from the paired analysis.
 8. **Final deliverables ready** (W11): committed Parquet outputs, executable notebooks, thesis report, and overlay visualizations.
@@ -596,11 +590,11 @@ All metrics show ICC values in the range 0.83–0.92, indicating strong within-c
 
 ### 8.1 Reduced Bias Through Global Team Assignment and Improved Recall
 
-The pipeline optimization (Fixes 0–7) substantially reduced systematic bias on the two global Pitch Control metrics. `pc_mean` bias improved from −0.148 to −0.037, a 75% reduction; `pc_area_gt_0p5` bias improved from −0.155 to −0.044, a 72% reduction. These gains stem from two complementary interventions.
+The pipeline optimization substantially reduced systematic bias on the two global Pitch Control metrics. `pc_mean` bias improved from −0.148 to −0.037, a 75% reduction; `pc_area_gt_0p5` bias improved from −0.155 to −0.044, a 72% reduction. These gains stem from two complementary interventions.
 
-First, global team assignment (Fix 2) replaced per-frame KMeans (k=3, refit to k=2) with a 250-frame fitting window and cross-frame mode consensus per track. The original per-frame approach was unstable: cluster centroids could swap between teams across consecutive frames, injecting noise into team labels and biasing PC surfaces. The global approach fits KMeans once on track-mean HSV vectors accumulated over 250 frames, then assigns each track its most frequent label. This stabilises labels across the entire clip and removes the frame-to-frame jitter that contaminated the original pipeline.
+First, per-frame KMeans (k=3, refit to k=2) was replaced with a global team assignment approach: a single KMeans model is fitted on track-mean HSV vectors accumulated over a 250-frame window, and each track receives its most frequent label via cross-frame mode consensus. The original per-frame approach was unstable: cluster centroids could swap between teams across consecutive frames, injecting noise into team labels and biasing PC surfaces. The global approach fits KMeans once per clip, then assigns each track its most frequent label. This stabilises labels across the entire clip and removes the frame-to-frame jitter that contaminated the original pipeline.
 
-Second, detector recall improvement (Fix 3) lowered the Soccana confidence threshold from 0.40 to 0.25, enabled Test-Time Augmentation, and activated class-agnostic NMS. Mean detected players per frame increased from 15.99 to 20.29, now exceeding the GT mean of 18.69. The original pipeline's defender shortfall (7.41 vs GT 9.13) was the dominant driver of global underestimation: in the Shaw (2020) model, missing defenders mechanically inflates attacking control. With the recall gap closed, the systematic downward bias on `pc_mean` and `pc_area_gt_0p5` is largely eliminated.
+Second, detector recall was improved by lowering the Soccana confidence threshold from 0.40 to 0.25, enabling Test-Time Augmentation, and activating class-agnostic NMS. Mean detected players per frame increased from 15.99 to 20.29, now exceeding the GT mean of 18.69. The original pipeline's defender shortfall (7.41 vs GT 9.13) was the dominant driver of global underestimation: in the Shaw (2020) model, missing defenders mechanically inflates attacking control. With the recall gap closed, the systematic downward bias on `pc_mean` and `pc_area_gt_0p5` is largely eliminated.
 
 `pc_at_ball` bias also improved modestly, from −0.051 to −0.039, with histogram overlap increasing from 0.804 to 0.889, the highest overlap achieved on any metric.
 
@@ -616,7 +610,7 @@ The defender-specific improvement is visible in the per-frame statistics: mean d
 
 ### 8.3 Pipeline Autonomy: Removing the GT Ball Dependency
 
-The original pipeline depended on SoccerNet GSR ground-truth `bbox_pitch` annotations for ball position, the single remaining GT input consumed at inference time. Fix 4 replaced this with autonomous ball detection using Soccana (class=1, conf=0.15) tracked via ByteTrack, with linear interpolation for gaps of up to 5 frames and frame-1 priority logic for set-piece resting position.
+The original pipeline depended on SoccerNet GSR ground-truth `bbox_pitch` annotations for ball position, the single remaining GT input consumed at inference time. This dependency was removed by integrating autonomous ball detection directly into the pipeline: Soccana (class=1, conf=0.15) tracked via ByteTrack, with linear interpolation for gaps of up to 5 frames and frame-1 priority logic for set-piece resting position.
 
 Autonomous ball detection produces valid positions for 22 of 33 clips (67% coverage). The 11 clips without valid ball positions are those where the ball is occluded, out of frame, or detected with insufficient confidence across the frame window. For the 22 covered clips, the pipeline is now fully autonomous: no GT annotations are consumed at any stage of inference.
 
@@ -634,7 +628,7 @@ The frame-1 priority logic is motivated by set-piece physics: at the moment of a
 
 ### 8.5 Statistical Rigour: ICC and Effective Sample Size
 
-Fix 1 introduced ICC(2,1) computation via Pingouin to quantify within-clip frame correlation. All five PC metrics show high ICC values (0.83–0.92), indicating that frames within the same clip are strongly correlated, as expected for a 31-frame window of a near-static set-piece formation.
+To quantify within-clip frame correlation, ICC(2,1) was computed via Pingouin with clip_id as targets and frame_idx as raters. All five PC metrics show high ICC values (0.83–0.92), indicating that frames within the same clip are strongly correlated, as expected for a 31-frame window of a near-static set-piece formation.
 
 The practical consequence is that the 674 nominal paired frames have the statistical power of approximately 24–26 truly independent observations. Effective sample sizes are: `pc_at_ball` = 23.90, `pc_mean` = 25.23, `pc_in_box` = 25.31, `pc_in_third` = 26.13, `pc_area_gt_0p5` = 26.21. These values reflect strong frame-to-frame dependence (each clip's 31 frames contribute roughly one effective independent observation), consistent with the near-static set-piece formation window. With ICC values of 0.83–0.92 and m_avg = 30.64, the design effect is approximately 25–27, reducing the effective sample size to roughly one observation per clip.
 
@@ -701,14 +695,14 @@ This project set out to answer a single practical question: can a broadcast-vide
 
 The development process surfaced a significant data-quality issue in SoccerNet GSR (Somers et al., 2024): the `action_position` field is a global broadcast frame number, not a clip-local index, causing the entire pipeline to operate on end-of-clip open-play frames rather than set-piece formations until the bug was identified and fixed. This mid-project discovery and correction illustrates the importance of data validation as an active rather than passive phase of CRISP-DM (Chapman et al., 2000), and is documented here both as a methodological lesson and as a contribution to future users of this dataset.
 
-The subsequent optimization effort (Fixes 0–7) addressed the three error regimes identified in the initial analysis: global underestimation was largely resolved through improved detector recall (75% bias reduction on `pc_mean`); box inversion was partially improved through global team assignment (19% bias reduction on `pc_in_box`); and the pipeline achieved full autonomy through autonomous ball detection, removing the last GT dependency. ICC analysis revealed that within-clip correlation is high (0.83–0.92), with design effects of 25–27 that reduce 674 nominal paired frames to approximately 24–26 effective independent observations; cohort expansion is the binding constraint on statistical power.
+The subsequent optimization addressed the three error regimes identified in the initial analysis: global underestimation was largely resolved through improved detector recall (75% bias reduction on `pc_mean`); box inversion was partially improved through global team assignment (19% bias reduction on `pc_in_box`); and the pipeline achieved full autonomy through autonomous ball detection, removing the last GT dependency. ICC analysis revealed that within-clip correlation is high (0.83–0.92), with design effects of 25–27 that reduce 674 nominal paired frames to approximately 24–26 effective independent observations; cohort expansion is the binding constraint on statistical power.
 
 ### 9.2 Core Conclusions
 
 1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals, within this 22-clip validation cohort of SoccerNet GSR footage (Somers et al., 2024). `pc_at_ball`: bias = −0.039, overlap = 0.889. `pc_mean`: bias = −0.037, overlap = 0.749. `pc_area_gt_0p5`: bias = −0.044, overlap = 0.745.
 2. **Pipeline optimization substantially reduced bias:** `pc_mean` bias improved from −0.148 to −0.037 (75% reduction); `pc_area_gt_0p5` from −0.155 to −0.044 (72% reduction); `pc_in_box` from +0.216 to +0.176 (19% reduction, sign inversion persists).
 3. **TVCalib autonomous calibration** (Theiner & Ewerth, 2023) enables fully autonomous camera-to-pitch projection: 33/33 clips processed, zero homography failures, no GT pitch-line annotations consumed.
-4. **Autonomous ball detection** (Fix 4) removes the GT ball-position dependency for 22/33 clips (67% coverage), making the pipeline fully self-contained for covered clips.
+4. **Autonomous ball detection** removes the GT ball-position dependency for 22/33 clips (67% coverage), making the pipeline fully self-contained for covered clips.
 5. **ICC analysis reveals within-clip correlation** of 0.83–0.92 across all metrics, with effective sample sizes (n_eff) of 23.90–26.21 (approximately one effective observation per clip). Cohort expansion is the binding constraint on statistical power.
 6. **Detection recall closed the gap:** Mean players per frame increased from 15.99 to 20.29 (now exceeding GT 18.69), eliminating the systematic defender shortfall that drove global underestimation.
 7. **The pipeline is fully reproducible** on consumer hardware (~30 min on Apple Silicon MPS, no cloud). Two-level reproducibility: Level 1 from committed parquets (CI-verified), Level 2 from raw video (SSD required).
@@ -790,7 +784,7 @@ soccernet-setpiece-vision/
         _pipeline_core.py
         download_soccernet.py
         run_tvcalib_batch.py
-        run_optimized_pipeline.py      ← single video pass (Fixes 2+3+4)
+        run_optimized_pipeline.py      ← single video pass (team assignment, recall improvement, ball detection)
         dump_gt_setpieces.py
         run_pc_soccana_tvcalib.py
         run_pc_gt_full.py
@@ -812,7 +806,7 @@ soccernet-setpiece-vision/
         setpieces.parquet
         gt_spatial_benchmarks.parquet
         figures/
-            06_gantt_timeline.png               ← Project Gantt chart (Figure 1)
+            06_gantt_timeline.png               ← Project Gantt chart
             11_multiclass_detections.png        ← Soccana Player/Ball/Referee detection (methods figure)
             icc_effective_sample_size.png       ← ICC values and effective sample sizes
             still_corner_SNGS-116.png          ← three-panel thesis figure (corner)
