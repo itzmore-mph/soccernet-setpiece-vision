@@ -40,12 +40,13 @@ example/
 *.pt
 *.onnx
 
-# Outputs: keep parquet + figures (small, reproducible-from-notebooks)
-# Diagnostic per-clip videos excluded (33 clips each, ~GB total).
-# The 2 representative video_*.mp4 files are committed intentionally.
+# Outputs: parquets and SoccerNet-derived media excluded (NDA compliance).
+# Aggregate analysis figures (01-14 numbered PNGs, ICC figure) are kept.
+outputs/*.parquet
 outputs/figures/annotated/
 outputs/figures/overlay/
 outputs/figures/*.mp4
-!outputs/figures/video_*.mp4
+outputs/figures/*.gif
+outputs/figures/still_*.png
 report.pdf
 report.docx
