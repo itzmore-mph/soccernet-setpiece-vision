@@ -5,6 +5,7 @@ Checks:
 2. Validation statistics from PC parquets → matches committed validation parquet
 3. ICC computation from PC parquet → matches committed ICC parquet
 4. Clip-level validation from PC parquets → matches committed clip-level parquet
+5. pc_in_third stratified stats from PC parquets → matches committed by-action parquet
 
 Each check is tri-state:
   PASS  — re-derived result matches the committed parquet.
@@ -16,7 +17,7 @@ Each check is tri-state:
 
 Check 1 depends on the private detections + ball parquets, so it SKIPs in public
 CI and only runs locally (or in the university submission) where those exist.
-Checks 2, 3, and 4 run from committed public PC parquets, so they are real in CI.
+Checks 2-5 run from committed public PC parquets, so they are real in CI.
 
 Exit code 0 when nothing FAILED (PASS/SKIP only), non-zero on any FAIL.
 """
@@ -36,6 +37,7 @@ from _pipeline_core import process_track
 from compute_icc import compute_icc_per_metric
 from ks_table_tvcalib import compare, METRICS
 from clip_level_validation import clip_means, compare_clip_level
+from diagnose_pc_in_third import compute_stratified_stats
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -79,7 +81,7 @@ def _expand_balls_to_frames(balls_per_clip: pd.DataFrame, det: pd.DataFrame) -> 
 def verify_pc_computation() -> str:
     """Re-derive pitch control from detections + ball positions and compare."""
     print("=" * 70)
-    print("[1/4] Verifying PC computation reproducibility...")
+    print("[1/5] Verifying PC computation reproducibility...")
     print("=" * 70)
 
     det_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
@@ -134,7 +136,7 @@ def verify_validation_statistics() -> str:
     """Re-derive validation statistics from PC parquets and compare."""
     print()
     print("=" * 70)
-    print("[2/4] Verifying validation statistics reproducibility...")
+    print("[2/5] Verifying validation statistics reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -192,7 +194,7 @@ def verify_icc_computation() -> str:
     """Re-derive ICC from PC parquet and compare."""
     print()
     print("=" * 70)
-    print("[3/4] Verifying ICC computation reproducibility...")
+    print("[3/5] Verifying ICC computation reproducibility...")
     print("=" * 70)
 
     pc_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -242,7 +244,7 @@ def verify_clip_level_validation() -> str:
     """Re-derive clip-level paired validation from PC parquets and compare."""
     print()
     print("=" * 70)
-    print("[4/4] Verifying clip-level validation reproducibility...")
+    print("[4/5] Verifying clip-level validation reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -293,6 +295,54 @@ def verify_clip_level_validation() -> str:
         return FAIL
 
 
+def verify_pc_in_third_stratified() -> str:
+    """Re-derive the pc_in_third by-action stratified stats and compare."""
+    print()
+    print("=" * 70)
+    print("[5/5] Verifying pc_in_third stratified stats reproducibility...")
+    print("=" * 70)
+
+    pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
+    pc_gt_path = OUTPUTS_DIR / "pitch_control_gt_full.parquet"
+    committed_path = OUTPUTS_DIR / "pc_in_third_by_action.parquet"
+
+    for p in (pc_pipe_path, pc_gt_path, committed_path):
+        if not p.exists():
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
+
+    pc_pipe = pd.read_parquet(pc_pipe_path)
+    pc_gt = pd.read_parquet(pc_gt_path)
+    committed = pd.read_parquet(committed_path)
+    print(f"  Committed stratified stats: {committed.shape[0]} rows")
+
+    print("  Re-computing stratified stats (deterministic bootstrap)...")
+    recomputed = compute_stratified_stats(pc_pipe, pc_gt)
+
+    committed_sorted = committed.sort_values("segment").reset_index(drop=True)
+    recomputed_sorted = recomputed.sort_values("segment").reset_index(drop=True)
+
+    common_cols = sorted(set(committed_sorted.columns) & set(recomputed_sorted.columns))
+    committed_cmp = committed_sorted[common_cols].reset_index(drop=True)
+    recomputed_cmp = recomputed_sorted[common_cols].reset_index(drop=True)
+
+    try:
+        assert_frame_equal(
+            recomputed_cmp,
+            committed_cmp,
+            rtol=RTOL,
+            atol=ATOL,
+            check_dtype=False,
+            obj="pc_in_third stratified recomputed vs committed",
+        )
+        print("  ✓ pc_in_third stratified stats reproduce identically")
+        return PASS
+    except AssertionError as e:
+        print(f"  ✗ pc_in_third stratified stats MISMATCH:\n    {e}")
+        return FAIL
+
+
 def main() -> int:
     """Run all reproducibility checks. Returns 0 unless a check FAILED."""
     print("Reproducibility Verification (Level 1: from committed parquets)")
@@ -306,6 +356,7 @@ def main() -> int:
         "Validation statistics": verify_validation_statistics(),
         "ICC computation": verify_icc_computation(),
         "Clip-level validation": verify_clip_level_validation(),
+        "pc_in_third stratified": verify_pc_in_third_stratified(),
     }
 
     print()
