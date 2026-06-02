@@ -590,6 +590,36 @@ Both stratified frame-level correlations are individually significant (p < 0.001
 
 ![Figure 11: Per-frame paired scatter plots, pipeline vs GT, for each Pitch Control metric.](outputs/figures/09_paired_scatter.png)
 
+#### Supplementary Validation: Baselines, Agreement, and Spatial Error
+
+Five further analyses sharpen the picture and pre-empt standard examiner questions. All reproduce from the committed PC parquets except the spatial map, which needs the private detections.
+
+**Baseline skill.** A pipeline is only useful if it beats a trivial predictor. Benchmarking against an oracle baseline that predicts the GT grand mean for every frame gives a skill score of `1 - MAE_pipe / MAE_base`. All five metrics score below zero (`pc_mean` −0.19, `pc_at_ball` −0.36, `pc_in_third` −0.83, `pc_area_gt_0p5` −0.20, `pc_in_box` −2.15). The interpretation is precise and important: at the level of an individual frame, the pipeline does not predict Pitch Control better than simply knowing the population mean. This does not contradict the small distributional bias or the clip-level agreement; it states that the pipeline's value is distributional and comparative, not per-frame predictive. The baseline is deliberately strong (it has oracle access to the GT mean), so a negative skill is a conservative, honest bound rather than evidence the pipeline is uninformative.
+
+**Bland-Altman agreement (Figure 14).** Limits of agreement (bias +/- 1.96 SD of the differences) quantify per-frame spread. `pc_at_ball` has the tightest limits ([−0.27, +0.22] around bias −0.03), confirming it as the most trustworthy metric; `pc_in_box` has the widest and most off-centre ([−0.32, +0.74] around bias +0.21), confirming it as the least.
+
+**Table 8e: Bland-Altman limits of agreement (n=662 frames).**
+
+| Metric | Bias | Lower LoA | Upper LoA |
+|---|---|---|---|
+| pc_mean | −0.036 | −0.659 | +0.587 |
+| pc_at_ball | −0.028 | −0.272 | +0.216 |
+| pc_in_box | +0.210 | −0.319 | +0.739 |
+| pc_in_third | +0.059 | −0.340 | +0.458 |
+| pc_area_gt_0p5 | −0.039 | −0.745 | +0.667 |
+
+![Figure 14: Bland-Altman agreement plots per metric (pipeline minus GT vs their mean), with bias and 95% limits of agreement.](outputs/figures/15_bland_altman.png)
+
+**Error by player density and box-control confusion (Figure 15).** Binning absolute `pc_mean` error by detected-defender shortfall confirms the recall mechanism directly: error rises from 0.145 when defender counts match to 0.289 at a 3-4 defender shortfall. Treating box control as a binary classifier (does the attacker control the box, `pc_in_box` > 0.5?), the pipeline agrees with GT on only 48% of frames and asserts attacker control in 326 of 662 frames against GT's 31, a quantitative restatement of the box inversion.
+
+![Figure 15: Skill score vs baseline (left), mean absolute error by defender shortfall (centre), and box-control confusion matrix (right).](outputs/figures/16_validation_context.png)
+
+**Temporal stability.** The mean absolute frame-to-frame change in `pc_mean` is 0.021 for the pipeline versus 0.003 for GT, so the pipeline is roughly seven times more temporally jittery. Detection and team-assignment noise inject frame-to-frame instability that GT does not have, motivating temporal smoothing as future work.
+
+**Spatial error map (Figure 16).** Recomputing both 60x40 PC surfaces for every paired frame and averaging the absolute per-cell difference (after orienting all clips to attack rightward) turns the five scalar metrics into a spatial characterisation. Mean per-cell error is 0.225 in the own third, 0.225 in the middle third, and 0.290 in the attacking third, peaking at 0.485 in the penalty-box and wide-channel cells. The error is therefore not uniform: it concentrates exactly where the team-assignment failure operates, spatially corroborating the box inversion and the free-kick `pc_in_third` inversion as one localized phenomenon.
+
+![Figure 16: Per-cell mean absolute Pitch Control error (pipeline vs GT), oriented attack-to-right. Error concentrates in the attacking third and penalty area.](outputs/figures/17_spatial_pc_error.png)
+
 ### 7.6 Phase 6: Deployment
 
 The pipeline runs end-to-end on consumer hardware (Apple Silicon MPS), with no cloud dependency and no proprietary software licences. Runtime is approximately 30 minutes for all 33 clips. Parquet outputs are compatible with DuckDB, pandas, and polars. TVCalib (Theiner & Ewerth, 2023) removes any dependency on GT pitch-line annotations for camera calibration.
@@ -697,6 +727,8 @@ The error structure is tractable: every failure mode has a concrete cause and a 
 - **Effective sample size:** n_eff of 24–26 observations. Conclusions should not be generalised beyond this cohort or to broadcast conditions substantially different from SoccerNet GSR (Somers et al., 2024).
 - **Zero-velocity assumption:** Appropriate for set-piece snapshots but limited for open play. Players already in motion at execution are assigned zero velocity, understating the spatial advantage of runners.
 - **Per-frame identity ambiguity:** Pipeline track IDs are not matched to GT player IDs; team assignment accuracy is assessed implicitly through distributional validation rather than direct track matching.
+- **No per-frame predictive skill:** Against an oracle GT-mean baseline, frame-level skill scores are negative for all five metrics (Section 7.5). The pipeline is calibrated and comparable in aggregate but cannot predict an individual frame's Pitch Control better than the population mean; it should not be used as a per-delivery predictor.
+- **Temporal jitter:** The pipeline's frame-to-frame `pc_mean` change (0.021) is roughly seven times that of GT (0.003), reflecting detection and team-assignment noise. Temporal smoothing is reserved for future work.
 - **Single broadcast angle:** Performance on tactical cameras or multi-camera feeds has not been tested.
 
 ### 8.7 Practical Implications

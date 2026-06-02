@@ -6,6 +6,8 @@ Checks:
 3. ICC computation from PC parquet → matches committed ICC parquet
 4. Clip-level validation from PC parquets → matches committed clip-level parquet
 5. pc_in_third stratified stats from PC parquets → matches committed by-action parquet
+6. Supplementary validation extras from PC parquets → matches committed extras parquet
+7. Spatial PC error map from detections + ball → matches committed per-cell parquet
 
 Each check is tri-state:
   PASS  — re-derived result matches the committed parquet.
@@ -15,9 +17,9 @@ Each check is tri-state:
           fit to NDA video frames and ship only in the closed university
           submission. A SKIP never counts as a PASS and never masks a regression.
 
-Check 1 depends on the private detections + ball parquets, so it SKIPs in public
-CI and only runs locally (or in the university submission) where those exist.
-Checks 2-5 run from committed public PC parquets, so they are real in CI.
+Checks 1 and 7 depend on the private detections + ball parquets, so they SKIP in
+public CI and only run locally (or in the university submission) where those exist.
+Checks 2-6 run from committed public PC parquets, so they are real in CI.
 
 Exit code 0 when nothing FAILED (PASS/SKIP only), non-zero on any FAIL.
 """
@@ -38,6 +40,8 @@ from compute_icc import compute_icc_per_metric
 from ks_table_tvcalib import compare, METRICS
 from clip_level_validation import clip_means, compare_clip_level
 from diagnose_pc_in_third import compute_stratified_stats
+from validation_extras import build_extras_table
+from spatial_pc_error import compute_cell_error
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -81,7 +85,7 @@ def _expand_balls_to_frames(balls_per_clip: pd.DataFrame, det: pd.DataFrame) -> 
 def verify_pc_computation() -> str:
     """Re-derive pitch control from detections + ball positions and compare."""
     print("=" * 70)
-    print("[1/5] Verifying PC computation reproducibility...")
+    print("[1/7] Verifying PC computation reproducibility...")
     print("=" * 70)
 
     det_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
@@ -136,7 +140,7 @@ def verify_validation_statistics() -> str:
     """Re-derive validation statistics from PC parquets and compare."""
     print()
     print("=" * 70)
-    print("[2/5] Verifying validation statistics reproducibility...")
+    print("[2/7] Verifying validation statistics reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -194,7 +198,7 @@ def verify_icc_computation() -> str:
     """Re-derive ICC from PC parquet and compare."""
     print()
     print("=" * 70)
-    print("[3/5] Verifying ICC computation reproducibility...")
+    print("[3/7] Verifying ICC computation reproducibility...")
     print("=" * 70)
 
     pc_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -244,7 +248,7 @@ def verify_clip_level_validation() -> str:
     """Re-derive clip-level paired validation from PC parquets and compare."""
     print()
     print("=" * 70)
-    print("[4/5] Verifying clip-level validation reproducibility...")
+    print("[4/7] Verifying clip-level validation reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -299,7 +303,7 @@ def verify_pc_in_third_stratified() -> str:
     """Re-derive the pc_in_third by-action stratified stats and compare."""
     print()
     print("=" * 70)
-    print("[5/5] Verifying pc_in_third stratified stats reproducibility...")
+    print("[5/7] Verifying pc_in_third stratified stats reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -343,12 +347,112 @@ def verify_pc_in_third_stratified() -> str:
         return FAIL
 
 
+def verify_validation_extras() -> str:
+    """Re-derive the supplementary validation extras table and compare."""
+    print()
+    print("=" * 70)
+    print("[6/7] Verifying supplementary validation extras reproducibility...")
+    print("=" * 70)
+
+    pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
+    pc_gt_path = OUTPUTS_DIR / "pitch_control_gt_full.parquet"
+    committed_path = OUTPUTS_DIR / "validation_extras.parquet"
+
+    for p in (pc_pipe_path, pc_gt_path, committed_path):
+        if not p.exists():
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
+
+    pc_pipe = pd.read_parquet(pc_pipe_path)
+    pc_gt = pd.read_parquet(pc_gt_path)
+    committed = pd.read_parquet(committed_path)
+    print(f"  Committed extras: {committed.shape[0]} rows")
+
+    print("  Re-computing validation extras...")
+    recomputed = build_extras_table(pc_pipe, pc_gt)
+
+    sort_cols = ["analysis", "row", "col"]
+    committed_sorted = committed.sort_values(sort_cols).reset_index(drop=True)
+    recomputed_sorted = recomputed.sort_values(sort_cols).reset_index(drop=True)
+
+    common_cols = sorted(set(committed_sorted.columns) & set(recomputed_sorted.columns))
+    committed_cmp = committed_sorted[common_cols].reset_index(drop=True)
+    recomputed_cmp = recomputed_sorted[common_cols].reset_index(drop=True)
+
+    try:
+        assert_frame_equal(
+            recomputed_cmp,
+            committed_cmp,
+            rtol=RTOL,
+            atol=ATOL,
+            check_dtype=False,
+            obj="Validation extras recomputed vs committed",
+        )
+        print("  ✓ Validation extras reproduce identically")
+        return PASS
+    except AssertionError as e:
+        print(f"  ✗ Validation extras MISMATCH:\n    {e}")
+        return FAIL
+
+
+def verify_spatial_pc_error() -> str:
+    """Re-derive the per-cell spatial PC error map and compare (needs private inputs)."""
+    print()
+    print("=" * 70)
+    print("[7/7] Verifying spatial PC error reproducibility...")
+    print("=" * 70)
+
+    pipe_det_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
+    gt_det_path = OUTPUTS_DIR / "detections_gt_full.parquet"
+    balls_path = OUTPUTS_DIR / "ball_positions.parquet"
+    committed_path = OUTPUTS_DIR / "spatial_pc_error.parquet"
+
+    for p in (pipe_det_path, gt_det_path, balls_path, committed_path):
+        if not p.exists():
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
+
+    pipe_det = pd.read_parquet(pipe_det_path)
+    gt_det = pd.read_parquet(gt_det_path)
+    balls = pd.read_parquet(balls_path)
+    committed = pd.read_parquet(committed_path)
+    print(f"  Committed spatial cells: {committed.shape[0]} rows")
+
+    print("  Re-computing per-cell spatial error...")
+    recomputed = compute_cell_error(pipe_det, gt_det, balls)
+
+    sort_cols = ["iy", "ix"]
+    committed_sorted = committed.sort_values(sort_cols).reset_index(drop=True)
+    recomputed_sorted = recomputed.sort_values(sort_cols).reset_index(drop=True)
+
+    common_cols = sorted(set(committed_sorted.columns) & set(recomputed_sorted.columns))
+    committed_cmp = committed_sorted[common_cols].reset_index(drop=True)
+    recomputed_cmp = recomputed_sorted[common_cols].reset_index(drop=True)
+
+    try:
+        assert_frame_equal(
+            recomputed_cmp,
+            committed_cmp,
+            rtol=RTOL,
+            atol=ATOL,
+            check_dtype=False,
+            obj="Spatial PC error recomputed vs committed",
+        )
+        print("  ✓ Spatial PC error reproduces identically")
+        return PASS
+    except AssertionError as e:
+        print(f"  ✗ Spatial PC error MISMATCH:\n    {e}")
+        return FAIL
+
+
 def main() -> int:
     """Run all reproducibility checks. Returns 0 unless a check FAILED."""
     print("Reproducibility Verification (Level 1: from committed parquets)")
     print("Public PC/validation/ICC parquets are committed; the raw video-derived")
     print("inputs (Soccana detections, ball positions, homographies) are NDA-private")
-    print("and absent in public CI, so check 1 is expected to SKIP there.")
+    print("and absent in public CI, so checks 1 and 7 are expected to SKIP there.")
     print()
 
     results = {
@@ -357,6 +461,8 @@ def main() -> int:
         "ICC computation": verify_icc_computation(),
         "Clip-level validation": verify_clip_level_validation(),
         "pc_in_third stratified": verify_pc_in_third_stratified(),
+        "Validation extras": verify_validation_extras(),
+        "Spatial PC error": verify_spatial_pc_error(),
     }
 
     print()

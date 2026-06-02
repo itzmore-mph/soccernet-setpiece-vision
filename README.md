@@ -45,6 +45,8 @@ soccernet-setpiece-vision/
 │   ├── compute_icc.py            # ICC(2,1) + effective sample size per PC metric
 │   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=22)
 │   ├── diagnose_pc_in_third.py   # pc_in_third Simpson's-paradox diagnostic: stratified r by set-piece type
+│   ├── validation_extras.py      # Bland-Altman, skill vs baseline, density, box confusion, temporal stability
+│   ├── spatial_pc_error.py       # Per-cell PC error heatmap (private detections in, public aggregate out)
 │   ├── verify_reproducibility.py # SSD-free: re-derives PC/validation/ICC from parquets
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
@@ -223,11 +225,13 @@ uv run python scripts/dump_gt_setpieces.py
 uv run python scripts/run_pc_soccana_tvcalib.py
 uv run python scripts/run_pc_gt_full.py
 
-# Generate validation tables + ICC + clip-level paired validation + pc_in_third diagnostic
+# Generate validation tables + ICC + clip-level + pc_in_third + extras + spatial error
 uv run python scripts/ks_table_tvcalib.py
 uv run python scripts/compute_icc.py
 uv run python scripts/clip_level_validation.py
 uv run python scripts/diagnose_pc_in_third.py
+uv run python scripts/validation_extras.py
+uv run python scripts/spatial_pc_error.py   # needs private detections; output is public aggregate
 ```
 
 ### 7. Run notebook 02 — Pitch Control
@@ -282,6 +286,8 @@ uv run python scripts/ks_table_tvcalib.py
 uv run python scripts/compute_icc.py
 uv run python scripts/clip_level_validation.py
 uv run python scripts/diagnose_pc_in_third.py
+uv run python scripts/validation_extras.py
+uv run python scripts/spatial_pc_error.py
 ```
 
 ---
