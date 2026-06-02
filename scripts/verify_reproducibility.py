@@ -4,6 +4,7 @@ Checks:
 1. PC computation from detections + ball positions → matches committed PC parquet
 2. Validation statistics from PC parquets → matches committed validation parquet
 3. ICC computation from PC parquet → matches committed ICC parquet
+4. Clip-level validation from PC parquets → matches committed clip-level parquet
 
 Each check is tri-state:
   PASS  — re-derived result matches the committed parquet.
@@ -15,7 +16,7 @@ Each check is tri-state:
 
 Check 1 depends on the private detections + ball parquets, so it SKIPs in public
 CI and only runs locally (or in the university submission) where those exist.
-Checks 2 and 3 run from committed public PC parquets, so they are real in CI.
+Checks 2, 3, and 4 run from committed public PC parquets, so they are real in CI.
 
 Exit code 0 when nothing FAILED (PASS/SKIP only), non-zero on any FAIL.
 """
@@ -34,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _pipeline_core import process_track
 from compute_icc import compute_icc_per_metric
 from ks_table_tvcalib import compare, METRICS
+from clip_level_validation import clip_means, compare_clip_level
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -77,7 +79,7 @@ def _expand_balls_to_frames(balls_per_clip: pd.DataFrame, det: pd.DataFrame) -> 
 def verify_pc_computation() -> str:
     """Re-derive pitch control from detections + ball positions and compare."""
     print("=" * 70)
-    print("[1/3] Verifying PC computation reproducibility...")
+    print("[1/4] Verifying PC computation reproducibility...")
     print("=" * 70)
 
     det_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
@@ -132,7 +134,7 @@ def verify_validation_statistics() -> str:
     """Re-derive validation statistics from PC parquets and compare."""
     print()
     print("=" * 70)
-    print("[2/3] Verifying validation statistics reproducibility...")
+    print("[2/4] Verifying validation statistics reproducibility...")
     print("=" * 70)
 
     pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -190,7 +192,7 @@ def verify_icc_computation() -> str:
     """Re-derive ICC from PC parquet and compare."""
     print()
     print("=" * 70)
-    print("[3/3] Verifying ICC computation reproducibility...")
+    print("[3/4] Verifying ICC computation reproducibility...")
     print("=" * 70)
 
     pc_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
@@ -236,6 +238,61 @@ def verify_icc_computation() -> str:
         return FAIL
 
 
+def verify_clip_level_validation() -> str:
+    """Re-derive clip-level paired validation from PC parquets and compare."""
+    print()
+    print("=" * 70)
+    print("[4/4] Verifying clip-level validation reproducibility...")
+    print("=" * 70)
+
+    pc_pipe_path = OUTPUTS_DIR / "pitch_control_soccana_tvcalib.parquet"
+    pc_gt_path = OUTPUTS_DIR / "pitch_control_gt_full.parquet"
+    committed_path = OUTPUTS_DIR / "clip_level_validation.parquet"
+
+    for p in (pc_pipe_path, pc_gt_path, committed_path):
+        if not p.exists():
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
+
+    pc_pipe = pd.read_parquet(pc_pipe_path)
+    pc_gt = pd.read_parquet(pc_gt_path)
+    committed = pd.read_parquet(committed_path)
+
+    pipe_c = clip_means(pc_pipe)
+    gt_c = clip_means(pc_gt)
+    common = pipe_c.index.intersection(gt_c.index)
+    pipe_c = pipe_c.loc[common].sort_index()
+    gt_c = gt_c.loc[common].sort_index()
+    print(f"  Matched clips: {len(common)}")
+    print(f"  Committed clip-level: {committed.shape[0]} rows")
+
+    print("  Re-computing clip-level paired validation (deterministic bootstrap)...")
+    recomputed = pd.DataFrame([compare_clip_level(pipe_c[m], gt_c[m], m) for m in METRICS])
+
+    committed_sorted = committed.sort_values("metric").reset_index(drop=True)
+    recomputed_sorted = recomputed.sort_values("metric").reset_index(drop=True)
+
+    common_cols = sorted(set(committed_sorted.columns) & set(recomputed_sorted.columns))
+    committed_cmp = committed_sorted[common_cols].reset_index(drop=True)
+    recomputed_cmp = recomputed_sorted[common_cols].reset_index(drop=True)
+
+    try:
+        assert_frame_equal(
+            recomputed_cmp,
+            committed_cmp,
+            rtol=RTOL,
+            atol=ATOL,
+            check_dtype=False,
+            obj="Clip-level recomputed vs committed",
+        )
+        print("  ✓ Clip-level validation reproduces identically")
+        return PASS
+    except AssertionError as e:
+        print(f"  ✗ Clip-level validation MISMATCH:\n    {e}")
+        return FAIL
+
+
 def main() -> int:
     """Run all reproducibility checks. Returns 0 unless a check FAILED."""
     print("Reproducibility Verification (Level 1: from committed parquets)")
@@ -248,6 +305,7 @@ def main() -> int:
         "PC computation": verify_pc_computation(),
         "Validation statistics": verify_validation_statistics(),
         "ICC computation": verify_icc_computation(),
+        "Clip-level validation": verify_clip_level_validation(),
     }
 
     print()
