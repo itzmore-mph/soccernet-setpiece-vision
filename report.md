@@ -527,7 +527,7 @@ No metrics pass the KS test at alpha = 0.05. This outcome requires careful inter
 | pc_in_third | 0.033 | 0.166 | +0.059 |
 | pc_area_gt_0p5 | 0.086 | 0.227 | −0.039 |
 
-Pearson r values are modest across all metrics. For global metrics and `pc_in_third`, this reflects range compression: both pipeline and GT produce values that cluster tightly around their respective means across the static set-piece formation window, leaving little cross-frame variance for linear correlation to detect. Pearson r in this regime captures frame-to-frame agreement poorly; the distributional statistics (bias and histogram overlap) are the appropriate measures of pipeline quality at the population level. The key result is that bias is below 0.05 for three of five metrics, meeting the operational deployability threshold. Frame-level Spearman correlation is omitted here because per-frame ranks within a near-static window are uninformative; the meaningful rank-agreement question is asked at the clip level instead (Spearman column, Table 8c), where it remains low for all metrics and is discussed as a limitation on cross-clip ranking.
+Pearson r values are modest across all metrics. For the global metrics (`pc_mean`, `pc_area_gt_0p5`) this reflects range compression: both pipeline and GT cluster tightly around their respective means across the static set-piece formation window, leaving little cross-frame variance for linear correlation to detect. `pc_in_third` is a distinct case: its near-zero pooled correlation is not range compression but a Simpson's paradox by set-piece type, diagnosed separately below. Pearson r in this regime captures frame-to-frame agreement poorly; the distributional statistics (bias and histogram overlap) are the appropriate measures of pipeline quality at the population level. The key result is that bias is below 0.05 for three of five metrics, meeting the operational deployability threshold. Frame-level Spearman correlation is omitted here because per-frame ranks within a near-static window are uninformative; the meaningful rank-agreement question is asked at the clip level instead (Spearman column, Table 8c), where it remains low for all metrics and is discussed as a limitation on cross-clip ranking.
 
 #### ICC and Effective Sample Size
 
@@ -573,7 +573,20 @@ Two nuances are worth recording. First, for `pc_mean` and `pc_area_gt_0p5` the m
 
 *Box inversion* (`pc_in_box`): This is the largest error. GT shows the defending team controlling the penalty box (mean 0.315), which is correct: at a corner, defenders pack the box. The pipeline estimates attacker control (0.491), a sign inversion, though with reduced severity compared to a purely per-frame team assignment approach. The cause is a structural limitation of HSV-based colour separation in crowded penalty-area crops: when both teams are tightly packed near the goal with overlapping bounding boxes, jersey colour features become harder to separate. Global KMeans fitting over 250 frames stabilises team labels across the clip but cannot resolve the fundamental colour confusion that arises in the specific spatial configuration of the penalty area during corners. Camera-angle effects compound this: broadcast cameras view the penalty area at an oblique angle, causing players at different pitch depths to overlap in the image plane, systematically affecting which jersey colours are sampled.
 
-*Calibrated range* (`pc_in_third`): Bias = +0.039, histogram overlap = 0.732. Attacking-third analysis integrates over a large pitch zone (~35 m × 68 m), diluting localised detection errors and team-assignment noise. Despite a low Pearson r (0.033), this metric is well-calibrated at the distributional level. The low per-frame correlation is expected and does not contradict the distributional result. At the moment of a set-piece, both pipeline and GT produce `pc_in_third` values that cluster tightly around their respective means, leaving minimal cross-frame variance. The relevant evaluation question is whether the pipeline produces a population-level distribution of attacking-third control that matches the GT distribution, and the distributional evidence (bias = +0.039, overlap = 0.732) answers that affirmatively. `pc_in_third` is valid as a comparative metric across clips; it is not a per-delivery predictor.
+*Action-type-dependent agreement* (`pc_in_third`): Bias = +0.039, histogram overlap = 0.732, so the metric is well-calibrated at the distributional level. Its pooled Pearson r, however, is +0.033 (n=662 frames, p=0.39), which initially looks like no agreement. Stratified diagnosis shows this is a Simpson's paradox, not a failure: the pipeline tracks GT positively for corners and inversely for direct free kicks, and pooling the two cancels to near zero (Table 8d, Figure 13b). Range restriction is explicitly ruled out, because the pipeline standard deviation (0.172) exceeds the GT standard deviation (0.114); the pipeline over-disperses rather than compressing. `pc_in_third` is therefore valid as a cross-clip comparative metric only when conditioned on set-piece type, and only for corners; it is not a per-delivery predictor.
+
+**Table 8d: pc_in_third correlation, pooled vs stratified by set-piece type. Bootstrap 95% CIs on Pearson r.**
+
+| Segment | n | Pearson r | r 95% CI | Spearman | std GT | std pipe |
+|---|---|---|---|---|---|---|
+| All frames (pooled) | 662 | +0.033 | [−0.054, +0.121] | −0.063 | 0.114 | 0.172 |
+| Frames, Corner | 183 | **+0.554** | [+0.436, +0.648] | +0.364 | 0.128 | 0.192 |
+| Frames, Direct free-kick | 479 | **−0.237** | [−0.320, −0.155] | −0.266 | 0.109 | 0.163 |
+| All clips (pooled) | 22 | −0.006 | [−0.554, +0.465] | −0.102 | 0.104 | 0.160 |
+
+Both stratified frame-level correlations are individually significant (p < 0.001) with confidence intervals that exclude zero, and their signs are confirmed by Spearman, so the effect is monotonic rather than outlier-driven. The clip-level coefficient (−0.006) is, by contrast, sampling noise: its bootstrap CI [−0.554, +0.465] spans almost the entire admissible range at n=22, so its sign must not be interpreted. The mechanism is discussed in Section 8.2b.
+
+![Figure 13b: pc_in_third pipeline vs GT, with a separate OLS fit per set-piece type. The corner fit slopes up (r = +0.55) and the direct-free-kick fit slopes down (r = −0.24); pooling them yields the misleading near-zero correlation.](outputs/figures/14_pc_in_third_by_action.png)
 
 ![Figure 11: Per-frame paired scatter plots, pipeline vs GT, for each Pitch Control metric.](outputs/figures/09_paired_scatter.png)
 
@@ -626,7 +639,7 @@ The pipeline produces well-calibrated estimates for the three most operationally
 
 `pc_mean` and `pc_area_gt_0p5` are well-calibrated global indicators: bias = −0.037 and −0.044 respectively, both well below the operational threshold of 0.10. These metrics integrate over the entire pitch surface and are appropriate for comparing overall set-piece spatial dominance across clips or opponents. Residual underestimation at this level traces directly to the defender detection shortfall (pipeline 7.96 vs GT 10.66 per frame): in the Shaw (2020) model, each missing defender inflates attacking control uniformly across the surface.
 
-`pc_in_third` provides a calibrated attacking-third view (bias = +0.039, overlap = 0.732). Its low per-frame Pearson r (0.033) reflects a statistical artefact of the evaluation design, not a model failure. Both pipeline and GT cluster tightly around their respective means across the 31-frame window, leaving minimal cross-frame variance for linear correlation to capture. The meaningful evaluation question is population-level: does the pipeline produce an attacking-third control distribution that matches GT across clips? The distributional evidence (bias = +0.039, overlap = 0.732) confirms it does, making `pc_in_third` valid for cross-clip comparison.
+`pc_in_third` is well-calibrated distributionally (bias = +0.039, overlap = 0.732) but its agreement with GT is action-type-dependent, which the pooled Pearson r of +0.033 conceals. As Table 8d shows, the pipeline correlates positively with GT for corners (r = +0.55) and negatively for direct free kicks (r = −0.24); the two cancel under pooling. The earlier reading of this as a range-compression artefact is incorrect: the pipeline standard deviation (0.172) exceeds the GT standard deviation (0.114), so the pipeline over-disperses rather than compressing. The correct interpretation is that `pc_in_third` reproduces attacking-third control faithfully for corners and inverts it for free kicks (Section 8.2b), so it is valid for cross-clip comparison only within the corner subset.
 
 ![Figure 14: Detected defender count per frame vs pc_mean. The negative trend confirms defender-recall shortfall as the dominant driver of global underestimation.](outputs/figures/10_defenders_vs_pc_mean.png)
 
@@ -639,6 +652,14 @@ The cause is a structural limit of HSV-based colour separation in crowded penalt
 Camera-angle effects amplify this. Broadcast cameras view the penalty area at an oblique angle during set pieces, causing players at different pitch depths to appear overlapping in the image plane. This foreshortening systematically affects which jersey colours are sampled at the player crop level, introducing a view-dependent bias that a global fitting approach cannot correct.
 
 `pc_in_box` should not be used as a reliable signal from this pipeline without resolving team-assignment reliability in crowded penalty areas.
+
+### 8.2b The pc_in_third Inversion: Action-Type-Dependent Agreement
+
+The near-zero pooled correlation for `pc_in_third` (Table 8d) is a Simpson's paradox: a strong positive relationship for corners (r = +0.55) and a significant negative one for direct free kicks (r = −0.24) cancel when combined. The mechanism is the interaction between ball location and the attacking-third population.
+
+For corners the ball is pinned at the corner arc, the attacking third is always the densely contested box-side strip, and the attacker-versus-defender mass there is recoverable from broadcast detections, so estimated control tracks ground truth. For direct free kicks the ball location varies and the attacking third is frequently sparsely populated, because free kicks are taken from a range of distances. With few players inside the strip, `pc_in_third` becomes highly sensitive to two pipeline-internal choices: which players are detected, and the `att_team = nearest-to-ball` assignment combined with HSV-KMeans team labels. In sparse, colour-confusable configurations this inverts the attacker-defender balance within the third relative to GT, producing the negative correlation. This is the same team-assignment failure mode that drives the penalty-box sign inversion (Section 8.2), surfacing here in a milder, action-type-dependent form rather than as a wholesale sign flip.
+
+Two consequences follow. First, `pc_in_third` should be reported and used stratified by set-piece type, not pooled. Second, resolving it requires the same remediation as the box inversion (supervised team assignment, better detection recall in sparse thirds), which unifies the pipeline's two distinct correlation defects under a single root cause.
 
 ### 8.3 Autonomous Ball Detection: Coverage and Limits
 
@@ -656,7 +677,7 @@ This has two further practical implications. First, the bootstrap CIs are wide (
 
 ### 8.5 Cross-Finding Synthesis
 
-The five validation metrics divide cleanly into three error regimes, each traceable to a distinct pipeline component:
+The five validation metrics divide into distinct error regimes, each traceable to a specific pipeline component:
 
 **Table 10: Error taxonomy mapping each validation metric to its dominant failure mode, current bias, and remediation path.**
 
@@ -665,7 +686,7 @@ The five validation metrics divide cleanly into three error regimes, each tracea
 | Global underestimation | `pc_mean`, `pc_area_gt_0p5` | −0.037, −0.044 | Defender detection recall | Lower threshold further or ensemble detector |
 | Moderate underestimation | `pc_at_ball` | −0.039 | Combined recall + proximity | Same; lower priority given MAE = 0.052 |
 | Sign inversion | `pc_in_box` | +0.176 | KMeans team assignment in crowded areas | Supervised classifier; appearance-based re-ID |
-| Calibrated | `pc_in_third` | +0.039 | None dominant | Retain; primary cross-clip comparative metric |
+| Calibrated, type-dependent | `pc_in_third` | +0.039 (dist.) | Team assignment in sparse free-kick thirds (corner r=+0.55, free-kick r=−0.24) | Stratify by set-piece type; same fix as box inversion |
 
 The error structure is tractable: every failure mode has a concrete cause and a clear remediation path. The pipeline is not uniformly wrong; it has a predictable bias profile that practitioners can account for.
 
@@ -683,7 +704,7 @@ The error structure is tractable: every failure mode has a concrete cause and a 
 1. Use `pc_at_ball` as the primary operational metric: bias = −0.039, overlap = 0.889, MAE = 0.052.
 2. Use `pc_mean` and `pc_area_gt_0p5` as calibrated global indicators (bias < 0.05) for cross-clip comparison.
 3. Do not use `pc_in_box` without resolving team-assignment reliability in crowded penalty areas; the sign inversion renders it unreliable as an absolute measure.
-4. Use `pc_in_third` for relative cross-clip comparisons; the low per-frame correlation does not limit its population-level validity.
+4. Use `pc_in_third` for relative cross-clip comparisons only within set-piece type, and only for corners (r = +0.55); it inverts for direct free kicks (r = −0.24), so pooled use is invalid. The distributional bias is small, but rank agreement is action-type-dependent.
 5. Expand the clip cohort as the highest-priority action for improving statistical confidence across all metrics.
 
 ### 8.8 Priority Actions for Next-Phase Execution
@@ -699,16 +720,16 @@ The error structure is tractable: every failure mode has a concrete cause and a 
 
 ### 9.1 Final Reflections
 
-This project addressed a single practical question: can a broadcast-video-only pipeline produce Pitch Control estimates distributionally comparable to ground-truth annotation-derived estimates, for set-piece frames, on consumer hardware? The answer is conditional but affirmative. `pc_at_ball` achieves bias = −0.039, overlap = 0.889. Global metrics `pc_mean` and `pc_area_gt_0p5` achieve bias below 0.05. `pc_in_third` provides a calibrated cross-clip comparative metric despite low per-frame correlation, a distinction that matters for correct interpretation.
+This project addressed a single practical question: can a broadcast-video-only pipeline produce Pitch Control estimates distributionally comparable to ground-truth annotation-derived estimates, for set-piece frames, on consumer hardware? The answer is conditional but affirmative. `pc_at_ball` achieves bias = −0.039, overlap = 0.889. Global metrics `pc_mean` and `pc_area_gt_0p5` achieve bias below 0.05. `pc_in_third` is distributionally calibrated (bias = +0.039) but its rank agreement with GT is action-type-dependent: positive for corners (r = +0.55) and inverted for direct free kicks (r = −0.24), a Simpson's paradox that must be conditioned on set-piece type for correct interpretation.
 
 The development process surfaced a significant data-quality issue in SoccerNet GSR (Somers et al., 2024): the `action_position` field is a global broadcast frame number, not a clip-local index. This caused the pipeline to process end-of-clip open-play frames rather than set-piece formations until the issue was identified and corrected. The discovery and correction is documented as a contribution to future users of this dataset and as an illustration of the value of CRISP-DM's active data validation phase (Chapman et al., 2000).
 
-The most important analytical finding is the clean three-way partition of error modes: global metrics are well-calibrated (bias < 0.05), the box-control metric has a structurally caused sign inversion in crowded penalty areas, and `pc_in_third` is distributionally reliable. This structure makes the pipeline's limitations tractable rather than opaque. ICC analysis further reveals that within-clip correlation (0.83–0.92) reduces 674 nominal paired frames to approximately 24–26 effective independent observations, identifying cohort expansion as the binding constraint on future statistical confidence.
+The most important analytical finding is the tractable partition of error modes: global metrics are well-calibrated (bias < 0.05), the box-control metric has a structurally caused sign inversion in crowded penalty areas, and `pc_in_third` is distributionally calibrated but exhibits action-type-dependent rank agreement (positive for corners, inverted for free kicks) traceable to the same team-assignment limit as the box inversion. This structure makes the pipeline's limitations tractable rather than opaque. ICC analysis further reveals that within-clip correlation (0.83–0.92) reduces 674 nominal paired frames to approximately 24–26 effective independent observations, identifying cohort expansion as the binding constraint on future statistical confidence.
 
 ### 9.2 Core Conclusions
 
 1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals within this 22-clip validation cohort (Somers et al., 2024). At the clip level (the effective inferential unit, n = 22), `pc_mean`, `pc_at_ball`, `pc_in_third`, and `pc_area_gt_0p5` are statistically indistinguishable from GT (bias 95% CIs contain zero, Wilcoxon p = 0.37 to 1.00); `pc_in_box` is the sole significant discrepancy (bias +0.207, CI [+0.107, +0.310], p = 0.002). Supporting frame-level descriptive statistics: `pc_at_ball` overlap = 0.889, `pc_mean` overlap = 0.749, `pc_area_gt_0p5` overlap = 0.745.
-2. **Bias is structural and attributable by metric:** global metrics are mildly underestimated due to asymmetric defender recall; `pc_in_box` is sign-inverted due to KMeans team-assignment failure in crowded penalty areas; `pc_in_third` is unaffected by both failure modes at the distributional level.
+2. **Bias is structural and attributable by metric:** global metrics are mildly underestimated due to asymmetric defender recall; `pc_in_box` is sign-inverted due to KMeans team-assignment failure in crowded penalty areas; `pc_in_third` is distributionally unbiased but its correlation with GT is action-type-dependent (corner r = +0.55, free-kick r = −0.24), a milder expression of the same team-assignment limit.
 3. **TVCalib autonomous calibration** (Theiner & Ewerth, 2023) delivers fully autonomous camera-to-pitch projection: 33/33 clips processed, zero homography failures, no GT pitch-line annotations consumed.
 4. **Autonomous ball detection** removes the GT ball-position dependency for 22/33 clips (67% coverage); no GT annotations are consumed at any inference stage for these clips.
 5. **ICC analysis** reveals within-clip correlation of 0.83–0.92, reducing the 674 nominal paired frames to n_eff of 23.90–26.21. Cohort expansion is the binding constraint on statistical power.
