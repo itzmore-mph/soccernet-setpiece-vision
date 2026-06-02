@@ -515,7 +515,7 @@ No metrics pass the KS test at alpha = 0.05. This outcome requires careful inter
 
 ![Figure 9: Distributional histogram overlays for each Pitch Control summary metric, pipeline vs GT.](outputs/figures/08_histogram_overlays.png)
 
-![Figure 10: KS validation summary table rendered as a figure for inline reference.](outputs/figures/14_ks_table_tvcalib.png)
+![Figure 10: KS validation summary table rendered as a figure for inline reference.](outputs/figures/12_ks_table_tvcalib.png)
 
 **Table 8: Per-frame paired comparison (n=662 paired frames).**
 

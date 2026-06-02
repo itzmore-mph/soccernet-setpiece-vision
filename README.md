@@ -47,10 +47,11 @@ soccernet-setpiece-vision/
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
 ├── tests/                        # pytest unit + property-based tests (hypothesis)
-├── outputs/                      # All committed (analysis runs without the SSD)
-│   ├── *.parquet                 # Detections, homographies, ball positions, PC surfaces, validation, ICC
+├── outputs/                      # Public parquets committed; NDA video-derived ones gitignored
+│   ├── *.parquet                 # Committed: PC surfaces, validation, ICC, GT detections, set-pieces
+│   │                             # Gitignored (NDA): detections_soccana_tvcalib, ball_positions, homographies
 │   └── figures/                  # Notebook + validation figures (PNG)
-├── docs/                         # Proposal PDFs/DOCX, design specs, change_ledger.md
+├── docs/                         # Proposal PDF, thesis PDF, TVCalib setup notes
 ├── .github/workflows/            # CI: reproducibility check on every push
 ├── report.md                     # Thesis source (pandoc → PDF)
 ├── pyproject.toml                # Project metadata + all dependencies (uv)
@@ -69,7 +70,7 @@ soccernet-setpiece-vision/
 - **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
 - **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
-**Note on homographies:** `outputs/homographies_tvcalib.parquet` is committed and contains pre-computed camera calibration matrices for all 33 clips (33 clips × 31 frames = 1,023 homographies). All downstream scripts read directly from this file. **You do not need TVCalib to run the pipeline or reproduce the analysis** — only to regenerate the homographies from scratch.
+**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). It is **gitignored (NDA)** because the matrices are fit to NDA video frames, so it is not in the public repo; it ships only in the closed university submission and is required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** — notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
 
 ---
 
@@ -260,7 +261,7 @@ This project supports two levels of reproducibility:
 
 ### Level 1: From Committed Parquets (No SSD Required)
 
-All statistical analysis, Pitch Control computation, validation statistics, ICC values, and figures reproduce identically from the committed Parquet files. This is verified automatically by CI on every push.
+Validation statistics, ICC values, and figures reproduce identically from the committed public Parquet files, and CI re-derives them on every push (`verify_reproducibility.py` checks 2 and 3). The Pitch Control surfaces themselves can also be re-derived, but only where the NDA video-derived inputs (Soccana detections, ball positions) are present — locally with the SSD or in the university submission; that check (check 1) SKIPs in public CI by design.
 
 ```bash
 uv run python scripts/verify_reproducibility.py

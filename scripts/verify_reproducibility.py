@@ -5,8 +5,21 @@ Checks:
 2. Validation statistics from PC parquets → matches committed validation parquet
 3. ICC computation from PC parquet → matches committed ICC parquet
 
-Exit code 0 on success, non-zero on failure.
+Each check is tri-state:
+  PASS  — re-derived result matches the committed parquet.
+  FAIL  — re-derived result diverges, OR a *public* (committed) input is missing.
+  SKIP  — a *private*, NDA-restricted input is absent. This is expected in public
+          CI: the raw Soccana detections, ball positions, and homographies are
+          fit to NDA video frames and ship only in the closed university
+          submission. A SKIP never counts as a PASS and never masks a regression.
+
+Check 1 depends on the private detections + ball parquets, so it SKIPs in public
+CI and only runs locally (or in the university submission) where those exist.
+Checks 2 and 3 run from committed public PC parquets, so they are real in CI.
+
+Exit code 0 when nothing FAILED (PASS/SKIP only), non-zero on any FAIL.
 """
+
 from __future__ import annotations
 
 import sys
@@ -29,10 +42,23 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 RTOL = 1e-5
 ATOL = 1e-8
 
+# Tri-state check results.
+PASS, SKIP, FAIL = "PASS", "SKIP", "FAIL"
 
-def _expand_balls_to_frames(
-    balls_per_clip: pd.DataFrame, det: pd.DataFrame
-) -> pd.DataFrame:
+# NDA video-derived parquets: gitignored, absent in public CI. Missing → SKIP.
+PRIVATE_INPUTS = {
+    "detections_soccana_tvcalib.parquet",
+    "ball_positions.parquet",
+    "homographies_tvcalib.parquet",
+}
+
+
+def _classify_missing(path: Path) -> str:
+    """Return SKIP if a missing input is a known private parquet, else FAIL."""
+    return SKIP if path.name in PRIVATE_INPUTS else FAIL
+
+
+def _expand_balls_to_frames(balls_per_clip: pd.DataFrame, det: pd.DataFrame) -> pd.DataFrame:
     """Expand per-clip ball positions to per-frame rows matching process_track schema.
 
     Handles both old schema (frame_idx, ball_x_m, ball_y_m) and new schema
@@ -42,15 +68,13 @@ def _expand_balls_to_frames(
         return balls_per_clip
 
     frames = det[["split", "clip_id", "frame_idx"]].drop_duplicates()
-    balls_renamed = balls_per_clip.rename(
-        columns={"x_pitch": "ball_x_m", "y_pitch": "ball_y_m"}
-    )
+    balls_renamed = balls_per_clip.rename(columns={"x_pitch": "ball_x_m", "y_pitch": "ball_y_m"})
     balls_renamed = balls_renamed[["split", "clip_id", "ball_x_m", "ball_y_m"]]
     expanded = frames.merge(balls_renamed, on=["split", "clip_id"], how="inner")
     return expanded
 
 
-def verify_pc_computation() -> bool:
+def verify_pc_computation() -> str:
     """Re-derive pitch control from detections + ball positions and compare."""
     print("=" * 70)
     print("[1/3] Verifying PC computation reproducibility...")
@@ -62,8 +86,9 @@ def verify_pc_computation() -> bool:
 
     for p in (det_path, balls_path, committed_path):
         if not p.exists():
-            print(f"  SKIP: {p.name} not found")
-            return True  # Not a failure if inputs missing
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
 
     det = pd.read_parquet(det_path)
     balls_raw = pd.read_parquet(balls_path)
@@ -75,9 +100,7 @@ def verify_pc_computation() -> bool:
     print(f"  Committed PC: {committed.shape[0]} rows")
 
     print("  Re-computing pitch control...")
-    recomputed = process_track(
-        det, track_name="soccana_tvcalib", team_col="team_kmeans", balls=balls
-    )
+    recomputed = process_track(det, track_name="soccana_tvcalib", team_col="team_kmeans", balls=balls)
 
     # Sort both for consistent comparison
     sort_cols = ["split", "clip_id", "frame_idx"]
@@ -99,13 +122,13 @@ def verify_pc_computation() -> bool:
             obj="PC recomputed vs committed",
         )
         print("  ✓ PC computation reproduces identically")
-        return True
+        return PASS
     except AssertionError as e:
         print(f"  ✗ PC computation MISMATCH:\n    {e}")
-        return False
+        return FAIL
 
 
-def verify_validation_statistics() -> bool:
+def verify_validation_statistics() -> str:
     """Re-derive validation statistics from PC parquets and compare."""
     print()
     print("=" * 70)
@@ -118,8 +141,9 @@ def verify_validation_statistics() -> bool:
 
     for p in (pc_pipe_path, pc_gt_path, committed_path):
         if not p.exists():
-            print(f"  SKIP: {p.name} not found")
-            return True
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
 
     pc_pipe = pd.read_parquet(pc_pipe_path)
     pc_gt = pd.read_parquet(pc_gt_path)
@@ -156,13 +180,13 @@ def verify_validation_statistics() -> bool:
             obj="Validation recomputed vs committed",
         )
         print("  ✓ Validation statistics reproduce identically")
-        return True
+        return PASS
     except AssertionError as e:
         print(f"  ✗ Validation statistics MISMATCH:\n    {e}")
-        return False
+        return FAIL
 
 
-def verify_icc_computation() -> bool:
+def verify_icc_computation() -> str:
     """Re-derive ICC from PC parquet and compare."""
     print()
     print("=" * 70)
@@ -174,8 +198,9 @@ def verify_icc_computation() -> bool:
 
     for p in (pc_path, committed_path):
         if not p.exists():
-            print(f"  SKIP: {p.name} not found")
-            return True
+            verdict = _classify_missing(p)
+            print(f"  {verdict}: {p.name} not found")
+            return verdict
 
     pc = pd.read_parquet(pc_path)
     committed = pd.read_parquet(committed_path)
@@ -205,16 +230,18 @@ def verify_icc_computation() -> bool:
             obj="ICC recomputed vs committed",
         )
         print("  ✓ ICC computation reproduces identically")
-        return True
+        return PASS
     except AssertionError as e:
         print(f"  ✗ ICC computation MISMATCH:\n    {e}")
-        return False
+        return FAIL
 
 
 def main() -> int:
-    """Run all reproducibility checks. Returns 0 on success, 1 on failure."""
+    """Run all reproducibility checks. Returns 0 unless a check FAILED."""
     print("Reproducibility Verification (Level 1: from committed parquets)")
-    print("No SSD required — all inputs are committed to the repository.")
+    print("Public PC/validation/ICC parquets are committed; the raw video-derived")
+    print("inputs (Soccana detections, ball positions, homographies) are NDA-private")
+    print("and absent in public CI, so check 1 is expected to SKIP there.")
     print()
 
     results = {
@@ -227,19 +254,26 @@ def main() -> int:
     print("=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    all_passed = True
-    for name, passed in results.items():
-        status = "✓ PASS" if passed else "✗ FAIL"
-        print(f"  {status}: {name}")
-        if not passed:
-            all_passed = False
+    symbol = {PASS: "✓ PASS", SKIP: "– SKIP", FAIL: "✗ FAIL"}
+    any_failed = False
+    for name, verdict in results.items():
+        print(f"  {symbol[verdict]}: {name}")
+        if verdict == FAIL:
+            any_failed = True
 
-    if all_passed:
-        print("\nAll reproducibility checks passed.")
-        return 0
-    else:
-        print("\nSome reproducibility checks FAILED. See details above.")
+    n_pass = sum(v == PASS for v in results.values())
+    n_skip = sum(v == SKIP for v in results.values())
+    n_fail = sum(v == FAIL for v in results.values())
+    print(f"\n{n_pass} passed, {n_skip} skipped, {n_fail} failed.")
+
+    if any_failed:
+        print("Some reproducibility checks FAILED. See details above.")
         return 1
+    if n_pass == 0:
+        print("No checks could run (all inputs absent). Treating as failure.")
+        return 1
+    print("All runnable reproducibility checks passed.")
+    return 0
 
 
 if __name__ == "__main__":
