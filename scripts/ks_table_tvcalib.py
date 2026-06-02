@@ -9,8 +9,9 @@ Reads:
 
 Writes:
     outputs/validation_summary_tvcalib.parquet
-    outputs/figures/14_ks_table_tvcalib.png
+    outputs/figures/12_ks_table_tvcalib.png
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,16 +42,28 @@ def hist_overlap(a, b, bins=HIST_BINS, lo=0.0, hi=1.0):
 
 def compare(a, b, metric):
     if len(a) < 3 or len(b) < 3:
-        return {"metric": metric, "n": len(a), "n_gt": len(b),
-                "ks_stat": np.nan, "ks_p": np.nan, "hist_overlap": np.nan,
-                "mean": np.nan, "mean_gt": np.nan, "delta": np.nan, "passes_ks": False}
+        return {
+            "metric": metric,
+            "n": len(a),
+            "n_gt": len(b),
+            "ks_stat": np.nan,
+            "ks_p": np.nan,
+            "hist_overlap": np.nan,
+            "mean": np.nan,
+            "mean_gt": np.nan,
+            "delta": np.nan,
+            "passes_ks": False,
+        }
     ks = stats.ks_2samp(a, b)
     return {
         "metric": metric,
-        "n": len(a), "n_gt": len(b),
-        "mean": float(a.mean()), "mean_gt": float(b.mean()),
+        "n": len(a),
+        "n_gt": len(b),
+        "mean": float(a.mean()),
+        "mean_gt": float(b.mean()),
         "delta": float(a.mean() - b.mean()),
-        "ks_stat": float(ks.statistic), "ks_p": float(ks.pvalue),
+        "ks_stat": float(ks.statistic),
+        "ks_p": float(ks.pvalue),
         "hist_overlap": hist_overlap(a, b),
         "passes_ks": bool(ks.pvalue >= KS_ALPHA),
     }
@@ -114,9 +127,11 @@ def main():
     table.scale(1.0, 1.5)
     ax.set_title(
         f"Soccana + TVCalib vs GT  (n=33 clips, KS α={KS_ALPHA})",
-        fontsize=12, pad=10, fontweight="bold",
+        fontsize=12,
+        pad=10,
+        fontweight="bold",
     )
-    out_fig = FIGURES_DIR / "14_ks_table_tvcalib.png"
+    out_fig = FIGURES_DIR / "12_ks_table_tvcalib.png"
     fig.savefig(out_fig, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"\nSaved: {out_fig}")

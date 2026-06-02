@@ -41,9 +41,18 @@ example/
 *.pt
 *.onnx
 
-# Outputs: parquets and SoccerNet-derived media excluded (NDA compliance).
-# Aggregate analysis figures (01-14 numbered PNGs, ICC figure) are kept.
-outputs/*.parquet
+# Outputs: only NDA video-derived parquets are excluded.
+# SoccerNet confirmed (2026-06-01): the GSR annotations are open source; content
+# derived from the video carries the video's copyright. Raw detections (pixel
+# bboxes / HSV), ball positions, and TVCalib homographies are all fit to NDA
+# frames, so they stay private and ship only in the closed university submission.
+# Annotation-derived and aggregate-statistic parquets (PC surfaces, validation,
+# ICC, benchmarks, StatsBomb set-pieces) ARE committed so the public analysis
+# and CI are self-contained.
+outputs/detections_soccana_tvcalib.parquet
+outputs/ball_positions.parquet
+outputs/homographies_tvcalib.parquet
+# SoccerNet-derived demo media (rendered from NDA video frames).
 outputs/figures/annotated/
 outputs/figures/overlay/
 outputs/figures/*.mp4
