@@ -511,7 +511,7 @@ Ball position is detected directly from broadcast video within the same single v
 | pc_in_third | 0.552 | 0.513 | +0.039 | 0.185 | <0.001 | 0.732 | No |
 | pc_area_gt_0p5 | 0.659 | 0.703 | −0.044 | 0.157 | <0.001 | 0.745 | No |
 
-No metrics pass the KS test at alpha = 0.05. This outcome requires careful interpretation. With n=674 pipeline frames and n=949 GT frames, the KS test has very high statistical power; even a small distributional difference produces a significant result. The KS statistic is the more informative quantity: for `pc_mean`, KS = 0.129 indicates a maximum distributional gap of approximately 13 percentage points between the two empirical CDFs. For context, a perfect match produces KS = 0.0; completely non-overlapping distributions produce KS = 1.0. A KS statistic of 0.129 at a histogram overlap of 0.749 reflects practical distributional similarity with a modest directional bias, not distributional failure. The formal rejection reflects sample size, not catastrophic model breakdown.
+No metrics pass the KS test at alpha = 0.05. This outcome requires careful interpretation. With n=674 pipeline frames and n=949 GT frames, the KS test has very high statistical power; even a small distributional difference produces a significant result. The KS statistic is the more informative quantity: for `pc_mean`, KS = 0.129 indicates a maximum distributional gap of approximately 13 percentage points between the two empirical CDFs. For context, a perfect match produces KS = 0.0; completely non-overlapping distributions produce KS = 1.0. A KS statistic of 0.129 at a histogram overlap of 0.749 reflects practical distributional similarity with a modest directional bias, not distributional failure. The formal rejection reflects sample size, not catastrophic model breakdown. This frame-level table is descriptive; the inferential test is conducted at the clip level (Table 8c below), where four of five metrics are statistically indistinguishable from GT once the pseudoreplication quantified by the ICC analysis is removed.
 
 ![Figure 9: Distributional histogram overlays for each Pitch Control summary metric, pipeline vs GT.](outputs/figures/08_histogram_overlays.png)
 
@@ -527,7 +527,7 @@ No metrics pass the KS test at alpha = 0.05. This outcome requires careful inter
 | pc_in_third | 0.033 | 0.166 | +0.059 |
 | pc_area_gt_0p5 | 0.086 | 0.227 | −0.039 |
 
-Pearson r values are modest across all metrics. For global metrics and `pc_in_third`, this reflects range compression: both pipeline and GT produce values that cluster tightly around their respective means across the static set-piece formation window, leaving little cross-frame variance for linear correlation to detect. Pearson r in this regime captures frame-to-frame agreement poorly; the distributional statistics (bias and histogram overlap) are the appropriate measures of pipeline quality at the population level. The key result is that bias is below 0.05 for three of five metrics, meeting the operational deployability threshold. Spearman rank correlation is not reported here because the compressed score distributions render it less informative than Pearson r in this regime.
+Pearson r values are modest across all metrics. For global metrics and `pc_in_third`, this reflects range compression: both pipeline and GT produce values that cluster tightly around their respective means across the static set-piece formation window, leaving little cross-frame variance for linear correlation to detect. Pearson r in this regime captures frame-to-frame agreement poorly; the distributional statistics (bias and histogram overlap) are the appropriate measures of pipeline quality at the population level. The key result is that bias is below 0.05 for three of five metrics, meeting the operational deployability threshold. Frame-level Spearman correlation is omitted here because per-frame ranks within a near-static window are uninformative; the meaningful rank-agreement question is asked at the clip level instead (Spearman column, Table 8c), where it remains low for all metrics and is discussed as a limitation on cross-clip ranking.
 
 #### ICC and Effective Sample Size
 
@@ -546,6 +546,26 @@ Within-clip temporal correlation was quantified using ICC(2,1) (Intraclass Corre
 All metrics show ICC values of 0.83–0.92, confirming strong within-clip frame correlation, as expected for a 31-frame window of a near-static set-piece formation. With N_total = 674 frames, mean cluster size m_avg = 30.64 frames per clip, and ICC ≈ 0.85, the design effect is approximately 26.5. Effective sample sizes (n_eff = N_total / (1 + (m_avg − 1) × ICC)) range from 23.90 to 26.21: the 674 nominal paired frames have the statistical power of approximately 24–26 truly independent observations, roughly one effective observation per clip. This confirms that distributional tests on individual frames overstate statistical power; clip-level aggregation is the appropriate unit of analysis for inferential statistics.
 
 ![Figure 11b: ICC(2,1) values and effective sample sizes per Pitch Control metric.](outputs/figures/icc_effective_sample_size.png)
+
+#### Clip-Level Validation: Testing at the Effective Inferential Unit
+
+The ICC result above establishes that the frame is not an independent observation: the ~31 frames of each clip are near-replicates, so the frame-level tables (Tables 7-8) describe the data but overstate inferential power. The statistically honest test aggregates each clip to a single value per metric (its within-clip mean) and pairs the 22 clips common to the pipeline and GT cohorts. On these 22 paired clip means I report the paired bias, a percentile bootstrap 95% confidence interval on the bias (10,000 resamples, fixed seed), the Wilcoxon signed-rank test (distribution-free, appropriate at n=22), and both Pearson and Spearman correlation.
+
+**Table 8c: Clip-level paired validation (n=22 matched clips). The bias CI is a percentile bootstrap; Wilcoxon tests the paired clip-mean differences.**
+
+| Metric | Pipeline | GT | Bias | Bias 95% CI | CI excl. 0? | Wilcoxon p | Pearson | Spearman |
+|---|---|---|---|---|:---:|---|---|---|
+| pc_mean | 0.649 | 0.696 | −0.047 | [−0.177, +0.075] | No | 1.000 | 0.173 | 0.228 |
+| pc_at_ball | 0.939 | 0.972 | −0.033 | [−0.087, +0.010] | No | 0.799 | 0.376 | 0.357 |
+| pc_in_box | 0.491 | 0.284 | **+0.207** | **[+0.107, +0.310]** | **Yes** | **0.002** | −0.029 | 0.038 |
+| pc_in_third | 0.551 | 0.499 | +0.053 | [−0.027, +0.131] | No | 0.371 | −0.006 | −0.102 |
+| pc_area_gt_0p5 | 0.657 | 0.710 | −0.053 | [−0.202, +0.085] | No | 0.849 | 0.081 | 0.142 |
+
+This is the decisive validation result. At the effective inferential unit, **four of the five metrics are statistically indistinguishable from ground truth**: their bias confidence intervals all contain zero and their Wilcoxon tests are non-significant (p = 0.37 to 1.00). Only `pc_in_box` differs significantly: its bias of +0.207 has a 95% CI of [+0.107, +0.310] that excludes zero, and the Wilcoxon test rejects equality (p = 0.002). The frame-level KS rejections (Table 7) are therefore an artefact of pseudoreplicated sample size, exactly as the ICC analysis predicted; once that inflation is removed, the only genuine distributional defect is the penalty-box sign inversion. This isolates a single, well-understood failure mode rather than a pervasive one, and it converts the headline claim from a qualitative "distributions look similar" into a formal inferential statement.
+
+Two nuances are worth recording. First, for `pc_mean` and `pc_area_gt_0p5` the mean bias (−0.047, −0.053) is non-trivial yet the Wilcoxon test returns p ≈ 1.0, indicating the per-clip differences are near-symmetric about zero and the mean bias is pulled by a few high-leverage clips rather than a consistent shift; the wide bootstrap CIs reflect this. Second, the clip-level Pearson and Spearman correlations remain low for every metric, confirming that cross-clip rank agreement is weak even where the distributions match. The pipeline reproduces the population-level magnitude of Pitch Control well, but it is not yet a reliable instrument for ranking one clip against another, a distinction that matters for how practitioners should and should not use it.
+
+![Figure 13: Clip-level bias with percentile bootstrap 95% confidence intervals per Pitch Control metric (n=22 matched clips). Only pc_in_box excludes zero.](outputs/figures/13_clip_level_validation.png)
 
 **Bias diagnosis.** The five metrics divide into three groups by error type.
 
@@ -600,7 +620,7 @@ Two-level reproducibility is implemented:
 
 ### 8.1 What the Pipeline Delivers: Global Metrics and Ball Control
 
-The pipeline produces well-calibrated estimates for the three most operationally relevant metrics.
+The pipeline produces well-calibrated estimates for the three most operationally relevant metrics. The clip-level test (Table 8c) puts this on a formal footing: `pc_mean`, `pc_at_ball`, `pc_in_third`, and `pc_area_gt_0p5` are all statistically indistinguishable from GT (bias CIs contain zero, Wilcoxon p = 0.37 to 1.00 at n = 22 clips). The qualifier is that these are non-detections of bias under wide confidence intervals, not proofs of zero bias; the magnitudes are nonetheless small and operationally usable.
 
 `pc_at_ball` shows the strongest performance: bias = −0.039, histogram overlap = 0.889, MAE = 0.052, Pearson r = 0.356. This metric captures the most decision-relevant signal for a tactical analyst: does the executing team control the space at the point of delivery? The pipeline reliably answers this question. The low MAE (0.052 on a 0–1 scale) means per-clip estimates are practically useful even at the individual frame level.
 
@@ -612,7 +632,7 @@ The pipeline produces well-calibrated estimates for the three most operationally
 
 ### 8.2 The Box Inversion: A Structural Limit
 
-`pc_in_box` has the largest and most structurally distinct error: bias = +0.176, histogram overlap = 0.517, KS = 0.475. GT shows the defending team controlling the penalty box (mean 0.315), which is correct: at a corner, defenders pack the box. The pipeline estimates attacker control (0.491), a sign inversion.
+`pc_in_box` has the largest and most structurally distinct error, and it is the only metric that survives clip-level testing as a statistically significant discrepancy: clip-level bias = +0.207, 95% CI [+0.107, +0.310] (excludes zero), Wilcoxon p = 0.002 (frame-level: bias +0.176, KS = 0.475, overlap = 0.517). GT shows the defending team controlling the penalty box (mean 0.284-0.315), which is correct: at a corner, defenders pack the box. The pipeline estimates attacker control (0.491), a sign inversion. This is therefore not a marginal calibration gap but a genuine, reproducible defect, which is why it alone is excluded from operational use below.
 
 The cause is a structural limit of HSV-based colour separation in crowded penalty-area crops. When both teams are tightly packed within a small spatial region, per-track mean HSV features from the torso crop become difficult to separate into two distinct clusters. KMeans cluster centroids are driven by the aggregate colour distribution of all players in the fitting window, not by spatial proximity during any particular frame. When the penalty area is the primary convergence zone for all 22 outfield players during a corner, the colour distributions of the two teams within that region overlap substantially, and cluster assignments can be swapped relative to the correct team identity.
 
@@ -630,7 +650,9 @@ Coverage at 22/33 clips (67%) is the primary deployment constraint. The 11 uncov
 
 The ICC(2,1) analysis reveals that within-clip temporal correlation (0.83–0.92) is the binding statistical constraint on the validation. With design effects of 25–27, the 674 nominal paired frames provide approximately 24–26 effective independent observations across 22 clips, roughly one per clip.
 
-This has two practical implications. First, confidence intervals on all point estimates (bias, histogram overlap) are wide, and no distributional test has adequate power to detect anything short of large distributional shifts at this cohort size. The formal KS rejections across all metrics reflect this high power relative to small residual distributional differences, not evidence of practical failure. Second, cohort expansion is the single most impactful action for improving statistical power: adding independent clips (from different matches and competitions) contributes roughly one effective observation per clip added, making expansion far more leverage than any algorithmic refinement.
+This motivated re-running the validation at the clip level (Table 8c): aggregating each clip to one value per metric and pairing the 22 common clips removes the pseudoreplication, and the bootstrap 95% CIs on the bias make the resulting uncertainty explicit. The outcome is decisive and is the central validation finding of this work. At the effective inferential unit, four of five metrics (`pc_mean`, `pc_at_ball`, `pc_in_third`, `pc_area_gt_0p5`) have bias CIs that contain zero and non-significant Wilcoxon tests (p = 0.37 to 1.00): they are statistically indistinguishable from GT. Only `pc_in_box` differs significantly (bias +0.207, CI [+0.107, +0.310], Wilcoxon p = 0.002). The frame-level KS rejections across all metrics were therefore an artefact of inflated sample size, not evidence of practical failure, exactly as the ICC analysis predicted.
+
+This has two further practical implications. First, the bootstrap CIs are wide (for example [−0.202, +0.085] on `pc_area_gt_0p5`), so the four non-significant results establish the absence of a *detectable* bias at this cohort size, not the proven absence of any bias; tighter intervals require more clips. Second, cohort expansion is the single most impactful action for improving statistical power: adding independent clips (from different matches and competitions) contributes roughly one effective observation per clip added, making expansion far more leverage than any algorithmic refinement.
 
 ### 8.5 Cross-Finding Synthesis
 
@@ -685,7 +707,7 @@ The most important analytical finding is the clean three-way partition of error 
 
 ### 9.2 Core Conclusions
 
-1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals within this 22-clip validation cohort (Somers et al., 2024). `pc_at_ball`: bias = −0.039, overlap = 0.889. `pc_mean`: bias = −0.037, overlap = 0.749. `pc_area_gt_0p5`: bias = −0.044, overlap = 0.745.
+1. **Broadcast-only Pitch Control is viable** for the most decision-relevant set-piece signals within this 22-clip validation cohort (Somers et al., 2024). At the clip level (the effective inferential unit, n = 22), `pc_mean`, `pc_at_ball`, `pc_in_third`, and `pc_area_gt_0p5` are statistically indistinguishable from GT (bias 95% CIs contain zero, Wilcoxon p = 0.37 to 1.00); `pc_in_box` is the sole significant discrepancy (bias +0.207, CI [+0.107, +0.310], p = 0.002). Supporting frame-level descriptive statistics: `pc_at_ball` overlap = 0.889, `pc_mean` overlap = 0.749, `pc_area_gt_0p5` overlap = 0.745.
 2. **Bias is structural and attributable by metric:** global metrics are mildly underestimated due to asymmetric defender recall; `pc_in_box` is sign-inverted due to KMeans team-assignment failure in crowded penalty areas; `pc_in_third` is unaffected by both failure modes at the distributional level.
 3. **TVCalib autonomous calibration** (Theiner & Ewerth, 2023) delivers fully autonomous camera-to-pitch projection: 33/33 clips processed, zero homography failures, no GT pitch-line annotations consumed.
 4. **Autonomous ball detection** removes the GT ball-position dependency for 22/33 clips (67% coverage); no GT annotations are consumed at any inference stage for these clips.

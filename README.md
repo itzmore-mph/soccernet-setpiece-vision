@@ -41,8 +41,9 @@ soccernet-setpiece-vision/
 │   ├── dump_gt_setpieces.py      # GT detections for all 33 clips
 │   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
 │   ├── run_pc_gt_full.py         # Pitch control (GT reference)
-│   ├── ks_table_tvcalib.py       # Validation table + figure
+│   ├── ks_table_tvcalib.py       # Frame-level distributional validation table + figure
 │   ├── compute_icc.py            # ICC(2,1) + effective sample size per PC metric
+│   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=22)
 │   ├── verify_reproducibility.py # SSD-free: re-derives PC/validation/ICC from parquets
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
@@ -221,9 +222,10 @@ uv run python scripts/dump_gt_setpieces.py
 uv run python scripts/run_pc_soccana_tvcalib.py
 uv run python scripts/run_pc_gt_full.py
 
-# Generate validation table + ICC
+# Generate validation tables + ICC + clip-level paired validation
 uv run python scripts/ks_table_tvcalib.py
 uv run python scripts/compute_icc.py
+uv run python scripts/clip_level_validation.py
 ```
 
 ### 7. Run notebook 02 — Pitch Control
@@ -276,6 +278,7 @@ uv run python scripts/run_optimized_pipeline.py
 uv run python scripts/run_pc_soccana_tvcalib.py
 uv run python scripts/ks_table_tvcalib.py
 uv run python scripts/compute_icc.py
+uv run python scripts/clip_level_validation.py
 ```
 
 ---
