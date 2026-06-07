@@ -26,12 +26,12 @@ from huggingface_hub import hf_hub_download
 _orig_torch_load = torch.load
 torch.load = lambda *a, **kw: _orig_torch_load(*a, **{**kw, "weights_only": False})
 
-from ultralytics import YOLO
+from ultralytics import YOLO  # noqa: E402
 
 # Ensure sibling scripts are importable when run from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _pipeline_core import (
+from _pipeline_core import (  # noqa: E402
     DEVICE,
     FITTING_WINDOW,
     FRAME_WINDOW,
