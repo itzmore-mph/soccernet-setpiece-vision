@@ -59,6 +59,20 @@ def verify_ssd_mount(env_path: str = ".env") -> Path:
 
 
 def discover_setpiece_clips(gsr_root: Path) -> pd.DataFrame:
+    """Walk the GSR directory tree and return one row per set-piece clip.
+
+    Parameters
+    ----------
+    gsr_root : Path
+        Root of the gamestate-2024 directory (contains train/valid/test/challenge
+        subdirectories, each with SNGS-* clip folders).
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: split, clip_id, clip_path, action_class, action_position.
+        Only clips whose action_class is in TARGET_ACTIONS are included.
+    """
     rows = []
     for split in SPLITS:
         split_dir = gsr_root / split
@@ -85,6 +99,24 @@ def discover_setpiece_clips(gsr_root: Path) -> pd.DataFrame:
 
 
 def load_tvcalib_lookup(outputs_dir: Path) -> dict[tuple[str, str, int], np.ndarray]:
+    """Load pre-computed TVCalib homographies and return a keyed lookup dict.
+
+    Reads homographies_tvcalib.parquet, inverts each world-to-image matrix,
+    and pre-multiplies by the centred-to-top-left coordinate transform so that
+    callers receive a direct image-pixel-to-pitch-metres projection.
+
+    Parameters
+    ----------
+    outputs_dir : Path
+        Directory containing homographies_tvcalib.parquet.
+
+    Returns
+    -------
+    dict
+        Keys are (split, clip_id, frame_idx) tuples; values are 3x3 float64
+        homography matrices (image pixels → pitch metres, top-left origin).
+        Frames whose homography matrix is singular are silently skipped.
+    """
     df = pd.read_parquet(outputs_dir / "homographies_tvcalib.parquet")
     out: dict = {}
     for _, r in df.iterrows():
@@ -102,6 +134,25 @@ def load_tvcalib_lookup(outputs_dir: Path) -> dict[tuple[str, str, int], np.ndar
 
 
 def jersey_hsv(image_bgr: np.ndarray, bbox_xywh: np.ndarray) -> np.ndarray:
+    """Extract mean HSV colour from a player's torso-band crop.
+
+    Samples the central horizontal band of the bounding box (x: 25–75 %,
+    y: 15–45 %) to target the jersey fabric while excluding shorts, boots,
+    and background.
+
+    Parameters
+    ----------
+    image_bgr : np.ndarray
+        Full BGR frame as returned by cv2.imread.
+    bbox_xywh : np.ndarray
+        Bounding box in (x, y, width, height) format (pixel coordinates).
+
+    Returns
+    -------
+    np.ndarray
+        Shape (3,): mean [H, S, V] of the crop, or [nan, nan, nan] if the
+        crop has zero area.
+    """
     x, y, w, h = bbox_xywh
     x1 = int(x + 0.25 * w)
     x2 = int(x + 0.75 * w)
@@ -127,6 +178,29 @@ def _is_ref_like(c: np.ndarray) -> bool:
 
 
 def assign_teams_kmeans(hsv_features: np.ndarray, k: int = 3, drop_frac: float = 0.15) -> np.ndarray:
+    """Assign team labels (0/1) via KMeans on HSV features, collapsing the referee cluster.
+
+    Fits KMeans(k=3) on valid (non-NaN) rows. The smallest cluster is dropped
+    if it represents fewer than drop_frac of all tracks OR its centroid looks
+    referee-like (yellow/dark HSV). The remaining two clusters become team 0 and
+    team 1. Falls back to KMeans(k=2) if fewer than k valid samples exist.
+
+    Parameters
+    ----------
+    hsv_features : np.ndarray
+        Shape (N, 3): per-track mean HSV vectors. Rows with NaN are ignored.
+    k : int
+        Number of KMeans clusters before collapsing. Default 3.
+    drop_frac : float
+        Fraction threshold below which the smallest cluster is treated as
+        referees/outliers and dropped. Default 0.15.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (N,) int: labels 0 or 1 for each track. Rows that were NaN or
+        assigned to the dropped cluster receive label -1.
+    """
     valid = ~np.isnan(hsv_features).any(axis=1)
     labels = np.full(len(hsv_features), -1, dtype=int)
     n_valid = int(valid.sum())
@@ -476,6 +550,21 @@ def validate_ball_positions(
 
 
 def project_points(H: np.ndarray, pts_xy: np.ndarray) -> np.ndarray:
+    """Apply a 3x3 homography to an array of 2-D points.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Shape (3, 3) homography matrix (image pixels → pitch metres).
+    pts_xy : np.ndarray
+        Shape (N, 2) array of (x, y) coordinates to project.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (N, 2) projected coordinates. Returns the input unchanged if
+        pts_xy is empty.
+    """
     if len(pts_xy) == 0:
         return pts_xy
     homo = np.column_stack([pts_xy, np.ones(len(pts_xy))])
@@ -508,6 +597,7 @@ def filter_pitch_bounds(coords: np.ndarray) -> np.ndarray:
 
 
 def load_frame(clip_path: Path, frame_idx: int) -> np.ndarray | None:
+    """Load a JPEG frame from the clip's img1/ directory. Returns None if missing."""
     fp = clip_path / "img1" / f"{frame_idx:06d}.jpg"
     if not fp.is_file():
         return None
@@ -515,6 +605,9 @@ def load_frame(clip_path: Path, frame_idx: int) -> np.ndarray | None:
 
 
 def image_id_for_frame(labels: dict, frame_idx: int) -> int | None:
+    """Return the image_id for a given frame index from a Labels-GameState dict.
+    Returns None if the frame is not listed in labels['images'].
+    """
     target = f"{frame_idx:06d}.jpg"
     for img in labels["images"]:
         if img.get("file_name") == target:
@@ -523,6 +616,7 @@ def image_id_for_frame(labels: dict, frame_idx: int) -> int | None:
 
 
 def reset_tracker(yolo) -> None:
+    """Reset ByteTrack state to prevent track-ID leakage between clips."""
     if hasattr(yolo, "predictor") and yolo.predictor is not None:
         if hasattr(yolo.predictor, "trackers") and yolo.predictor.trackers:
             yolo.predictor.trackers[0].reset()
@@ -533,6 +627,28 @@ def build_detection_rows(
     frame_detections: list[dict],
     track_team_map: dict[int, int],
 ) -> list[dict]:
+    """Convert raw per-frame detection dicts to a flat list of row dicts.
+
+    Projects player foot-points to pitch coordinates via the stored homography,
+    applies pitch-bounds filtering, attaches team labels from track_team_map,
+    and appends referee rows with team=-1. Only players with a valid team label
+    (>= 0) and in-bounds pitch coordinates are included.
+
+    Parameters
+    ----------
+    clip : pd.Series
+        Clip metadata (split, clip_id, action_class).
+    frame_detections : list[dict]
+        Each dict has keys: frame_idx, H (3x3), dets (Nx6), hsv_batch (Nx3),
+        ref_dets (Mx5).
+    track_team_map : dict[int, int]
+        Maps track_id → team label (0 or 1) from global KMeans consensus.
+
+    Returns
+    -------
+    list[dict]
+        One dict per valid detection, ready to be passed to pd.DataFrame().
+    """
     rows = []
     for fd in frame_detections:
         H = fd["H"]
@@ -814,6 +930,23 @@ TIME_TO_INTERCEPT_SIGMOID_K = np.pi / (np.sqrt(3.0) * SIGMA)
 
 
 def time_to_intercept(player_xy: np.ndarray, target_xy: np.ndarray) -> np.ndarray:
+    """Compute time-to-intercept under the zero-velocity (static) assumption.
+
+    TTI = REACTION_TIME + distance / MAX_SPEED, following Shaw (2020).
+    Under zero velocity, all players are treated as stationary.
+
+    Parameters
+    ----------
+    player_xy : np.ndarray
+        Shape (P, 2): player pitch coordinates in metres.
+    target_xy : np.ndarray
+        Shape (G, 2): grid cell centres in metres.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (P, G): TTI in seconds for each player-cell pair.
+    """
     from scipy.spatial.distance import cdist
     dist = cdist(player_xy, target_xy)
     return REACTION_TIME + dist / MAX_SPEED
@@ -822,6 +955,32 @@ def time_to_intercept(player_xy: np.ndarray, target_xy: np.ndarray) -> np.ndarra
 def pitch_control_surface(
     att_xy: np.ndarray, def_xy: np.ndarray, ball_xy: tuple, nx: int = GRID_NX, ny: int = GRID_NY
 ) -> np.ndarray:
+    """Compute a Pitch Control surface using the Laurie Shaw TTI sigmoid model.
+
+    For each grid cell the attacking control probability is the logistic sigmoid
+    applied to (TTI_att - TTI_def), where TTI is the minimum time-to-intercept
+    across all players of that team. Returns 0.5 everywhere if either team has
+    no players.
+
+    Parameters
+    ----------
+    att_xy : np.ndarray
+        Shape (A, 2): attacking player positions in pitch metres.
+    def_xy : np.ndarray
+        Shape (D, 2): defending player positions in pitch metres.
+    ball_xy : tuple
+        (x, y) ball position in pitch metres (unused in the surface computation
+        itself, present for interface consistency).
+    nx : int
+        Grid resolution along the pitch length (default GRID_NX=60).
+    ny : int
+        Grid resolution along the pitch width (default GRID_NY=40).
+
+    Returns
+    -------
+    np.ndarray
+        Shape (ny, nx): attacking team control probability per cell in [0, 1].
+    """
     xs = np.linspace(0.0, PITCH_LENGTH_M, nx)
     ys = np.linspace(0.0, PITCH_WIDTH_M, ny)
     grid = np.array(np.meshgrid(xs, ys)).reshape(2, -1).T
@@ -837,6 +996,30 @@ def pitch_control_surface(
 def split_attack_defend(
     players_xy: np.ndarray, team_labels: np.ndarray, ball_xy: tuple
 ) -> tuple[np.ndarray, np.ndarray, object]:
+    """Split players into attacking and defending teams by nearest-to-ball rule.
+
+    The attacking team is whichever team has the player with the smallest
+    Euclidean distance to ball_xy. If fewer than two teams are present, all
+    players are assigned to attack and defend is empty.
+
+    Parameters
+    ----------
+    players_xy : np.ndarray
+        Shape (N, 2): player pitch positions in metres.
+    team_labels : np.ndarray
+        Shape (N,): integer team label per player (-1 = referee, excluded).
+    ball_xy : tuple
+        (x, y) ball position in pitch metres.
+
+    Returns
+    -------
+    att_xy : np.ndarray
+        Positions of attacking players.
+    def_xy : np.ndarray
+        Positions of defending players.
+    att_team : object
+        Team label of the attacking team.
+    """
     bx, by = ball_xy
     teams = [t for t in np.unique(team_labels)
              if t is not None and t != -1 and not (isinstance(t, float) and np.isnan(t))]
@@ -855,6 +1038,26 @@ def split_attack_defend(
 
 
 def summarise_surface(pc: np.ndarray, ball_xy: tuple) -> dict:
+    """Compute the five PC summary metrics from a Pitch Control surface.
+
+    The attacking third and penalty box are determined by ball position:
+    if ball_x < 52.5 m the attacking direction is left (x <= 35 m), otherwise
+    right (x >= 70 m). The relevant penalty box is the one in the attacking
+    direction (standard 16.5 m × 40.32 m box).
+
+    Parameters
+    ----------
+    pc : np.ndarray
+        Shape (ny, nx): attacking team control probability per cell.
+    ball_xy : tuple
+        (x, y) ball position in pitch metres (top-left origin).
+
+    Returns
+    -------
+    dict
+        Keys: pc_mean, pc_at_ball, pc_in_box, pc_in_third, pc_area_gt_0p5.
+        pc_in_box and pc_in_third are NaN if no grid cells fall in the region.
+    """
     bx, by = ball_xy
     ny, nx = pc.shape
     xs = np.linspace(0.0, PITCH_LENGTH_M, nx)
