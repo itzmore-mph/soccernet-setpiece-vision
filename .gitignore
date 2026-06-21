@@ -36,7 +36,7 @@ venv/
 data/raw/
 data/interim/
 example/
-docs/
+/docs
 
 # Large model weights (auto-downloaded to ~/.cache)
 *.pt
