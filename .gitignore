@@ -62,3 +62,4 @@ outputs/figures/*.gif
 outputs/figures/still_*.png
 report.pdf
 report.docx
+*.docx
