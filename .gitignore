@@ -36,19 +36,13 @@ venv/
 data/raw/
 data/interim/
 example/
+docs/
 
 # Large model weights (auto-downloaded to ~/.cache)
 *.pt
 *.onnx
 
-# Outputs: only NDA video-derived parquets are excluded.
-# SoccerNet confirmed (2026-06-01): the GSR annotations are open source; content
-# derived from the video carries the video's copyright. Raw detections (pixel
-# bboxes / HSV), ball positions, and TVCalib homographies are all fit to NDA
-# frames, so they stay private and ship only in the closed university submission.
-# Annotation-derived and aggregate-statistic parquets (PC surfaces, validation,
-# ICC, benchmarks, StatsBomb set-pieces) ARE committed so the public analysis
-# and CI are self-contained.
+# Outputs: Soccernet NDA video-derived parquets are excluded
 outputs/detections_soccana_tvcalib.parquet
 outputs/ball_positions.parquet
 outputs/homographies_tvcalib.parquet
@@ -60,6 +54,3 @@ outputs/figures/overlay/
 outputs/figures/*.mp4
 outputs/figures/*.gif
 outputs/figures/still_*.png
-report.pdf
-report.docx
-*.docx
