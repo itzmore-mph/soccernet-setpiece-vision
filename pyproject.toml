@@ -1,6 +1,6 @@
 [project]
 name = "soccernet-setpiece-vision"
-version = "0.1.0"
+version = "1.0.0"
 description = "Pitch Control from broadcast video for set-piece analysis using SoccerNet data"
 requires-python = ">=3.11"
 dependencies = [

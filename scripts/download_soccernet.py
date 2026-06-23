@@ -1,5 +1,5 @@
 """
-Download SoccerNet GSR Dataset to external SSD.
+Download the SoccerNet GSR dataset to a local directory (SOCCERNET_LOCAL_DIR).
 Idempotent: splits already on disk are skipped.
 Run: python scripts/download_soccernet.py
 """
@@ -19,7 +19,7 @@ ALL_SPLITS = ["train", "valid", "test", "challenge"]
 
 LOCAL_DIR = Path(os.getenv(
     "SOCCERNET_LOCAL_DIR",
-    "/Volumes/MPH-ExternalStorage/soccernet-gsr",
+    "data/soccernet-gsr",
 ))
 TASK_DIR = LOCAL_DIR / TASK
 

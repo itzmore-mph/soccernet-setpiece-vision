@@ -26,7 +26,7 @@ from _pipeline_core import (
     compute_setpiece_ball_position,
     filter_pitch_bounds,
     interpolate_ball_gaps,
-    verify_ssd_mount,
+    verify_soccernet_data,
 )
 
 
@@ -324,10 +324,10 @@ def test_ball_position_median_fallback(frames_1_to_5):
 
 
 # ---------------------------------------------------------------------------
-# Feature: pipeline-optimization, Property 7: SSD Mount Verification Rejects Invalid Paths
+# Feature: pipeline-optimization, Property 7: SoccerNet Data Verification Rejects Invalid Paths
 # ---------------------------------------------------------------------------
 # *For any* path string that does not correspond to an existing directory,
-# `verify_ssd_mount()` SHALL exit the process with a non-zero status and an
+# `verify_soccernet_data()` SHALL exit the process with a non-zero status and an
 # error message containing the path.
 #
 # **Validates: Requirements 3.6, 6.6, 7.5, 9.4**
@@ -344,11 +344,11 @@ def test_ball_position_median_fallback(frames_1_to_5):
         max_size=50,
     ),
 )
-def test_ssd_mount_rejects_invalid(path_suffix):
-    """Property 7: SSD Mount Verification Rejects Invalid Paths.
+def test_soccernet_data_rejects_invalid(path_suffix):
+    """Property 7: SoccerNet Data Verification Rejects Invalid Paths.
 
     For any path that does not correspond to an existing directory,
-    verify_ssd_mount() SHALL exit with non-zero status and an error
+    verify_soccernet_data() SHALL exit with non-zero status and an error
     message containing the path.
 
     Validates: Requirements 3.6, 6.6, 7.5, 9.4
@@ -363,7 +363,7 @@ def test_ssd_mount_rejects_invalid(path_suffix):
         env_file.write_text(f"SOCCERNET_LOCAL_DIR={fake_path}\n")
 
         with pytest.raises(SystemExit) as exc_info:
-            verify_ssd_mount(str(env_file))
+            verify_soccernet_data(str(env_file))
 
     # Should exit with non-zero status.
     # sys.exit(string_message) sets code to the string itself (which counts as
@@ -427,3 +427,46 @@ def test_pc_idempotence():
 
     # Assert identical outputs
     pd.testing.assert_frame_equal(pc_run1, pc_run2)
+
+
+# ---------------------------------------------------------------------------
+# Feature: tvcalib-homography-loading, Property 9: Non-finite homographies skipped
+# ---------------------------------------------------------------------------
+# *For any* homographies parquet containing rows whose 3x3 matrix has a NaN or
+# Inf entry, load_tvcalib_lookup() SHALL omit those frames from the lookup,
+# because np.linalg.inv returns NaN (without raising) for non-finite input and
+# the resulting NaN-projected points would otherwise leak downstream.
+# ---------------------------------------------------------------------------
+
+
+def test_load_tvcalib_lookup_skips_non_finite(tmp_path: Path):
+    """Property 9: Non-finite homographies are skipped at load time.
+
+    A homographies parquet with one finite (invertible) matrix, one NaN matrix,
+    and one Inf matrix yields a lookup containing only the finite frame.
+    """
+    from _pipeline_core import load_tvcalib_lookup
+
+    cols = ["h00", "h01", "h02", "h10", "h11", "h12", "h20", "h21", "h22"]
+
+    def _row(split, clip_id, frame_idx, mat):
+        flat = np.asarray(mat, dtype=float).ravel()
+        return {"split": split, "clip_id": clip_id, "frame_idx": frame_idx,
+                **dict(zip(cols, flat))}
+
+    finite = np.eye(3)
+    nan_mat = np.full((3, 3), np.nan)
+    inf_mat = np.eye(3).copy()
+    inf_mat[0, 0] = np.inf
+
+    df = pd.DataFrame([
+        _row("test", "SNGS-001", 5, finite),
+        _row("test", "SNGS-001", 6, nan_mat),
+        _row("test", "SNGS-001", 7, inf_mat),
+    ])
+    df.to_parquet(tmp_path / "homographies_tvcalib.parquet", index=False)
+
+    lookup = load_tvcalib_lookup(tmp_path)
+
+    assert set(lookup.keys()) == {("test", "SNGS-001", 5)}
+    assert np.isfinite(lookup[("test", "SNGS-001", 5)]).all()

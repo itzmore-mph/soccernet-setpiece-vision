@@ -7,7 +7,7 @@ characterisation. It answers "where on the pitch does the pipeline disagree with
 GT" and is expected to localise the error in the attacking third and penalty box.
 
 The pipeline surface needs the video-derived detections parquet, so this script runs
-only where it is present (locally or after regenerating from the SSD). The OUTPUT is
+only where it is present (locally or after regenerating from the SoccerNet GSR dataset). The OUTPUT is
 aggregate (mean error per cell) and committed: detections in, aggregate out.
 
 Reads:

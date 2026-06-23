@@ -38,9 +38,10 @@ soccernet-setpiece-vision/
 │   ├── download_soccernet.py     # Data download (idempotent)
 │   ├── run_tvcalib_batch.py      # Homography computation (requires TVCalib sibling env)
 │   ├── run_optimized_pipeline.py # Single-pass: detections + ball + team assignment (Fixes 2–4)
-│   ├── dump_gt_setpieces.py      # GT detections for all 33 clips
+│   ├── dump_gt_setpieces.py      # GT player detections for all 33 clips
+│   ├── dump_gt_ball.py           # GT ball positions (annotation-derived, public)
 │   ├── run_pc_soccana_tvcalib.py # Pitch control (pipeline)
-│   ├── run_pc_gt_full.py         # Pitch control (GT reference)
+│   ├── run_pc_gt_full.py         # Pitch control (GT reference; uses GT ball)
 │   ├── ks_table_tvcalib.py       # Frame-level distributional validation table + figure
 │   ├── compute_icc.py            # ICC(2,1) + effective sample size per PC metric
 │   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=22)
@@ -51,9 +52,10 @@ soccernet-setpiece-vision/
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
 ├── tests/                        # pytest unit + property-based tests (hypothesis)
-├── outputs/                      # All numeric parquets committed; only video media is gitignored
-│   ├── *.parquet                 # Committed: PC surfaces, validation, ICC, GT + pipeline detections,
-│   │                             #   ball positions, homographies, set-pieces
+├── outputs/                      # Public numeric parquets committed; private video-derived ones gitignored
+│   ├── *.parquet                 # Committed (public): PC surfaces, validation, ICC, GT detections,
+│   │                             #   GT ball, spatial error, set-pieces. Gitignored (private, NDA):
+│   │                             #   Soccana detections, pipeline ball positions, homographies
 │   └── figures/                  # Committed analysis/validation figures (PNG); rendered video
 │                                 #   media (annotated/, overlay/, *.mp4, *.gif) gitignored
 ├── pyproject.toml                # Project metadata + all dependencies (uv)
@@ -72,10 +74,10 @@ soccernet-setpiece-vision/
 
 - **Python 3.11** - install via any Python version manager
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)** - fast Python package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- **SoccerNet GSR data** on external SSD (~35 GB) - only needed for full reproduction
+- **SoccerNet GSR data** (~35 GB local copy) - only needed for full reproduction from raw video
 - **Internet** - first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
-**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). These are numeric matrices and are committable (see Data & Licensing below), but they must be regenerated from the SSD via TVCalib - they are not bundled here yet. They are required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** - notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
+**Note on homographies and other video-derived parquets.** Three parquets are derived directly from the NDA-protected video frames and inherit the leagues' video copyright, so they are **not** in this public repo (gitignored, closed-submission only): `homographies_tvcalib.parquet`, `detections_soccana_tvcalib.parquet`, and `ball_positions.parquet` (see Data & Licensing below). They are required only for the full raw-video path. **You do not need them, the raw video, or TVCalib to reproduce the public analysis** - notebooks 02–03 and the validation/ICC scripts read the committed Pitch Control parquets directly. TVCalib is needed only to regenerate `homographies_tvcalib.parquet` from scratch (see below).
 
 ---
 
@@ -144,31 +146,110 @@ uv run python scripts/run_tvcalib_batch.py
 
 ---
 
-## Quick Start (from committed outputs, no SSD needed)
+## How to Run
 
-All four notebooks run top-to-bottom without the SSD. Notebooks 02 and 03 reproduce the full Pitch Control and validation analysis from the committed Parquet files. Notebook 02 recomputes GT Pitch Control live from committed GT detections and loads the pipeline side from the committed PC parquet when the raw pipeline detections are absent. Notebook 04 only renders broadcast overlays, so without the SSD frames and pipeline detections it runs but its render cells skip cleanly (no figures produced); mount the SSD to generate the visualizations.
+There are two reproduction paths. **Path A** verifies all published results from the committed parquets and needs no raw video, no TVCalib, and none of the private video-derived parquets. **Path B** reproduces everything end-to-end from the raw SoccerNet GSR video (a local copy of the dataset).
+
+Why two paths: the three video-derived parquets (`detections_soccana_tvcalib`, `ball_positions`, `homographies_tvcalib`) are NDA-protected and not in the public repo (see Data & Licensing). Their *committed* downstream outputs (`pitch_control_*`, validation, ICC, spatial error) are public, so the analysis layer reproduces without them.
+
+> **Thesis submission (offline ZIP, all parquets included).** The university submission is a folder that bundles **every** parquet, including the three video-derived ones, but no raw video (too large, NDA). Graders need no raw video, no `.env`, and no internet beyond `uv sync`. The committed Pitch Control parquets are the authoritative results; the chain below re-derives every validation table, ICC, diagnostic, and the spatial error map from them and reproduces the committed outputs byte-for-byte:
+>
+> ```bash
+> uv sync
+>
+> # Re-derive both Pitch Control surfaces from the included parquets
+> uv run python scripts/run_pc_soccana_tvcalib.py   # from detection + ball parquets
+> uv run python scripts/run_pc_gt_full.py           # from GT detections + GT ball parquet
+>
+> # Validation, ICC, supplementary analyses, spatial error
+> uv run python scripts/ks_table_tvcalib.py
+> uv run python scripts/compute_icc.py
+> uv run python scripts/clip_level_validation.py
+> uv run python scripts/diagnose_pc_in_third.py
+> uv run python scripts/validation_extras.py
+> uv run python scripts/spatial_pc_error.py
+>
+> # Notebooks (run straight from the parquets, no raw video)
+> uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
+> uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+> ```
+>
+> The two `run_pc_*` steps regenerate `pitch_control_soccana_tvcalib.parquet` and `pitch_control_gt_full.parquet` from their inputs and reproduce the committed surfaces exactly. The GT side uses the GT ball (`gt_ball_positions.parquet`, annotation-derived and public), not the pipeline ball, so the reference stays independent of pipeline error.
+>
+> Only the raw-video stages stay un-runnable and are pre-computed for you: detection/tracking (`run_optimized_pipeline.py`), calibration (`run_tvcalib_batch.py`), GT player/ball extraction (`dump_gt_setpieces.py`, `dump_gt_ball.py`), and the broadcast-overlay renders (nb04 render cells, `render_*.py`). Their outputs are already in the committed parquets / figures. Notebook 01 is also pre-run; its outputs (`setpieces.parquet`, `gt_spatial_benchmarks.parquet`) are included.
+
+### Path A - Verify from committed parquets (no raw video)
+
+Copy-paste, runs in a few minutes:
 
 ```bash
-# 1. Install dependencies (Python 3.11 required)
 uv sync
 
-# 2. Run analysis notebooks (order matters)
+# Analysis notebooks (read committed PC parquets)
 uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
 uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
-# nb04 runs SSD-free but its render cells skip without SSD frames + pipeline detections:
-uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
 
-# 3. Run validation table (from committed pipeline outputs)
+# Validation, ICC, and the supplementary analyses (all read committed PC parquets)
 uv run python scripts/ks_table_tvcalib.py
+uv run python scripts/compute_icc.py
+uv run python scripts/clip_level_validation.py
+uv run python scripts/diagnose_pc_in_third.py
+uv run python scripts/validation_extras.py
 ```
 
-Or open each notebook in JupyterLab / VS Code and run interactively.
+Notebook 04 also runs without raw video, but its broadcast-overlay render cells skip cleanly (no figures) without the SoccerNet video frames + private detections. `spatial_pc_error.py`, `run_pc_soccana_tvcalib.py`, and the pipeline/GT-extraction scripts are **not** in Path A: they consume the private video-derived parquets and only run in Path B (or in the offline submission, where every parquet is bundled). `run_pc_gt_full.py` is the exception - it now reads the public `gt_ball_positions.parquet`, so it runs from committed parquets.
+
+### Path B - Full reproduction from raw video (SoccerNet GSR dataset required)
+
+Copy-paste, end-to-end (~45+ min; TVCalib must be set up, see below):
+
+```bash
+uv sync
+
+# Configure .env (SOCCERNET_PASSWORD, SOCCERNET_LOCAL_DIR), then download:
+uv run python scripts/download_soccernet.py
+
+# nb01 -> setpieces.parquet + gt_spatial_benchmarks.parquet (public)
+uv run jupyter nbconvert --to notebook --execute notebooks/01_business_and_data_understanding.ipynb --inplace
+
+# Homographies first - run_optimized_pipeline loads them (needs ../tvcalib env)
+uv run python scripts/run_tvcalib_batch.py
+
+# Pipeline single pass -> detections_soccana_tvcalib.parquet + ball_positions.parquet
+uv run python scripts/run_optimized_pipeline.py
+
+# GT player + GT ball extraction (annotation-derived, public parquets)
+uv run python scripts/dump_gt_setpieces.py
+uv run python scripts/dump_gt_ball.py
+# Pitch Control surfaces (soccana from pipeline ball; gt from GT ball)
+uv run python scripts/run_pc_soccana_tvcalib.py
+uv run python scripts/run_pc_gt_full.py
+
+# Validation + ICC + supplementary + spatial error
+uv run python scripts/ks_table_tvcalib.py
+uv run python scripts/compute_icc.py
+uv run python scripts/clip_level_validation.py
+uv run python scripts/diagnose_pc_in_third.py
+uv run python scripts/validation_extras.py
+uv run python scripts/spatial_pc_error.py
+
+# Notebooks (04 renders broadcast overlays from SoccerNet video frames)
+uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
+
+# Optional: rendered annotated clips / PC overlays (video media, gitignored)
+uv run python scripts/render_annotated_clips.py
+uv run python scripts/render_pc_overlay.py
+```
+
+If you already have the private `homographies_tvcalib.parquet` locally, skip `run_tvcalib_batch.py` (and the TVCalib setup). Per-step detail follows below.
 
 ---
 
-## Full Reproduction (from raw video data)
+## Path B - Step-by-step detail
 
-Reproduces all results end-to-end from the SoccerNet GSR video clips.
+Per-step explanation of the full raw-video reproduction above.
 
 ### 1. Environment setup
 
@@ -184,7 +265,7 @@ Create `.env` in the project root:
 
 ```env
 SOCCERNET_PASSWORD=your_password_here
-SOCCERNET_LOCAL_DIR=/Volumes/MPH-ExternalStorage/soccernet-gsr
+SOCCERNET_LOCAL_DIR=/path/to/soccernet-gsr
 ```
 
 ### 3. Download SoccerNet GSR data
@@ -204,24 +285,27 @@ Produces: `outputs/setpieces.parquet`, `outputs/gt_spatial_benchmarks.parquet`.
 ### 5. Compute TVCalib homographies
 
 ```bash
-# Stages frames 1–31 per clip into /tmp, runs TVCalib (~15 min, SSD required)
+# Stages frames 1–31 per clip into /tmp, runs TVCalib (~15 min, SoccerNet video required)
 # Requires TVCalib set up in ../tvcalib/ — see scripts/run_tvcalib_batch.py docstring
 uv run python scripts/run_tvcalib_batch.py
 ```
 
-Produces: `outputs/homographies_tvcalib.parquet`. Skip this step if you want to use the committed pre-computed homographies.
+Produces: `outputs/homographies_tvcalib.parquet` (private, gitignored). Skip this step only if you already have that parquet locally. It is not committed, so a fresh clone must regenerate it here.
 
 ### 6. Run the pipeline (Soccana + TVCalib)
 
 ```bash
-# Single-pass: player detection, ball detection, team assignment (~30 min, SSD required)
-# Outputs: detections_soccana_tvcalib.parquet + ball_positions.parquet
+# Single-pass: player detection, ball detection, team assignment (~30 min, SoccerNet video required)
+# Outputs: detections_soccana_tvcalib.parquet + ball_positions.parquet (both private)
 uv run python scripts/run_optimized_pipeline.py
 
-# GT detections (no SSD needed after this point)
+# GT player + GT ball extraction (reads GSR labels from the SoccerNet dataset; both outputs public)
 uv run python scripts/dump_gt_setpieces.py
+uv run python scripts/dump_gt_ball.py
 
 # Compute pitch control surfaces
+#   run_pc_soccana_tvcalib: private detections + pipeline ball
+#   run_pc_gt_full:         public GT detections + public GT ball (gt_ball_positions)
 uv run python scripts/run_pc_soccana_tvcalib.py
 uv run python scripts/run_pc_gt_full.py
 
@@ -252,48 +336,13 @@ uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_val
 uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
 ```
 
-Requires SSD (reads broadcast frames for overlays).
+Requires the SoccerNet GSR dataset (reads broadcast frames for overlays).
 
 ### 10. (Optional) Render annotated broadcast clips
 
 ```bash
 uv run python scripts/render_annotated_clips.py
 uv run python scripts/render_pc_overlay.py
-```
-
----
-
-## Reproducibility
-
-This project supports two levels of reproducibility:
-
-### Level 1: From Committed Parquets (No SSD Required)
-
-Pitch Control, validation statistics, ICC values, and figures reproduce from the committed public Parquet files. Notebooks 02 and 03 run top-to-bottom without the SSD, and the validation/ICC scripts below re-derive the published tables from the committed PC parquets. The video-derived inputs (Soccana detections, ball positions) are not required for this level.
-
-```bash
-uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
-uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
-uv run python scripts/ks_table_tvcalib.py
-uv run python scripts/compute_icc.py
-uv run python scripts/clip_level_validation.py
-uv run python scripts/diagnose_pc_in_third.py
-uv run python scripts/validation_extras.py
-```
-
-### Level 2: Full End-to-End (SSD Required)
-
-Complete reproduction from raw SoccerNet GSR video frames requires the external SSD mounted at the path specified in `.env`. This regenerates all intermediate parquets (detections, ball positions) and produces identical outputs to the committed versions.
-
-```bash
-uv run python scripts/run_optimized_pipeline.py
-uv run python scripts/run_pc_soccana_tvcalib.py
-uv run python scripts/ks_table_tvcalib.py
-uv run python scripts/compute_icc.py
-uv run python scripts/clip_level_validation.py
-uv run python scripts/diagnose_pc_in_third.py
-uv run python scripts/validation_extras.py
-uv run python scripts/spatial_pc_error.py
 ```
 
 ---
@@ -306,7 +355,9 @@ uv run python scripts/spatial_pc_error.py
 | Pipeline / mplsoccer | 105 m × 68 m, origin top-left |
 | SoccerNet GSR `bbox_pitch` | centred origin (±52.5 m, ±34 m) |
 
-Conversions: `x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`. GSR → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`.
+Conversions: `x_m = x_sb × (105/120)`, `y_m = y_sb × (68/80)`. 
+
+GSR → Pipeline: `x_m = x_gsr + 52.5`, `y_m = y_gsr + 34`.
 
 ---
 
@@ -329,8 +380,9 @@ See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
 The code in this repository is MIT-licensed. Data redistribution follows guidance the SoccerNet team provided in writing (2026-06-01):
 
-- **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source. Outputs derived solely from them. GT detections, validation, ICC, set-pieces are committed freely.
-- **Numeric pipeline outputs** derived from the video (Soccana detections, ball positions, TVCalib homographies, Pitch Control surfaces) are committable. They contain coordinates and matrices, not video. Note these were generated from league-copyrighted frames and theoretically carry the same copyright, so they are shared for academic, non-commercial use only.
+- **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source ("do whatever you want with them"). Outputs derived solely from them - GT player detections, GT ball positions (`gt_ball_positions.parquet`), validation, ICC, set-pieces - are committed freely.
+- **Raw video-derived parquets are private and not in this repo.** `detections_soccana_tvcalib.parquet`, `ball_positions.parquet`, and `homographies_tvcalib.parquet` are produced directly from the NDA-protected video frames. SoccerNet confirmed (2026-06-01) that content derived from the copyrighted video carries the same copyright and may not be redistributed, so these three are gitignored and ship only in the closed university thesis submission.
+- **Aggregate Pitch Control outputs are committed** (`pitch_control_*`, `spatial_pc_error`). These are heavily transformed summary surfaces, shared for academic, non-commercial use only; they let the public analysis layer reproduce without the private inputs.
 - **Raw and rendered video** is **not redistributable.** Broadcast frames are never committed, and annotated clips / GIFs / MP4s rendered from those frames are gitignored. Short (≤5 s) annotated excerpts may be shared off-repo as academic fair use, but are kept out of the public repository.
 
 Use is academic and non-commercial. See `LICENSE` for the code license.

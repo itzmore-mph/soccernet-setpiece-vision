@@ -31,10 +31,11 @@ pyrightconfig.json
 .venv/
 venv/
 
-# Data: never commit. Lives on external SSD.
+# Data: never commit raw SoccerNet GSR data (downloaded locally, large, league-copyrighted).
 /Volumes/
 data/raw/
 data/interim/
+data/soccernet-gsr/
 example/
 /docs
 
@@ -42,10 +43,14 @@ example/
 *.pt
 *.onnx
 
-# Outputs: numeric parquets are committable (annotation- and detection-derived
-# coordinates). Per SoccerNet (2026-06-01), annotation-derived data is open source;
-# video-derived numeric outputs are permitted, but raw/rendered video must not be
-# redistributed. So the parquets below are tracked; only actual video media stays out.
+# Outputs split (per SoccerNet email, 2026-06-01):
+#   - Annotation-derived + aggregate parquets are open source and committed.
+#   - Video-derived parquets inherit the leagues' video copyright and may NOT be
+#     redistributed, so they are gitignored and ship only in the closed university
+#     submission. Keep these three OUT of the public repo.
+outputs/detections_soccana_tvcalib.parquet
+outputs/ball_positions.parquet
+outputs/homographies_tvcalib.parquet
 #
 # Exploratory diagnostic scatters (regenerated on demand; not thesis artifacts).
 outputs/figures/diagnostics/

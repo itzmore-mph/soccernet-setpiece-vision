@@ -33,29 +33,31 @@ T_CENTRED_TO_TOPLEFT = np.array([
 ])
 
 
-def verify_ssd_mount(env_path: str = ".env") -> Path:
-    """Check SSD is mounted, return GSR root path or exit with a clear error.
+def verify_soccernet_data(env_path: str = ".env") -> Path:
+    """Locate the local SoccerNet GSR dataset, return its GSR root or exit with a clear error.
 
     Loads SOCCERNET_LOCAL_DIR from the .env file (or environment) and verifies
     the path exists as a directory. Exits the process with a non-zero status
-    and descriptive error message if the SSD is not mounted.
+    and descriptive error message if the dataset is not available locally.
 
     Args:
         env_path: Path to the .env file (relative to cwd or absolute).
 
     Returns:
-        Path to the gamestate-2024 directory on the SSD.
+        Path to the gamestate-2024 directory of the SoccerNet GSR dataset.
     """
     from dotenv import load_dotenv
 
     load_dotenv(env_path)
-    ssd_base = os.environ.get(
-        "SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr"
-    )
-    ssd_path = Path(ssd_base) / "gamestate-2024"
-    if not ssd_path.is_dir():
-        sys.exit(f"ERROR: SSD not mounted at {ssd_path}. Mount the drive and retry.")
-    return ssd_path
+    data_base = os.environ.get("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")
+    gsr_root = Path(data_base) / "gamestate-2024"
+    if not gsr_root.is_dir():
+        sys.exit(
+            f"ERROR: SoccerNet GSR data not found at {gsr_root}. "
+            "Set SOCCERNET_LOCAL_DIR in .env to your local SoccerNet GSR directory "
+            "(download via scripts/download_soccernet.py)."
+        )
+    return gsr_root
 
 
 def discover_setpiece_clips(gsr_root: Path) -> pd.DataFrame:
@@ -115,7 +117,8 @@ def load_tvcalib_lookup(outputs_dir: Path) -> dict[tuple[str, str, int], np.ndar
     dict
         Keys are (split, clip_id, frame_idx) tuples; values are 3x3 float64
         homography matrices (image pixels → pitch metres, top-left origin).
-        Frames whose homography matrix is singular are silently skipped.
+        Frames whose homography matrix is non-finite (TVCalib failed to
+        converge) or singular are silently skipped.
     """
     df = pd.read_parquet(outputs_dir / "homographies_tvcalib.parquet")
     out: dict = {}
@@ -125,6 +128,11 @@ def load_tvcalib_lookup(outputs_dir: Path) -> dict[tuple[str, str, int], np.ndar
             [r["h10"], r["h11"], r["h12"]],
             [r["h20"], r["h21"], r["h22"]],
         ])
+        # np.linalg.inv returns NaN (without raising) for non-finite input, so
+        # reject those frames here rather than relying on downstream bounds
+        # filtering to drop the resulting NaN-projected points.
+        if not np.isfinite(H_world_to_image).all():
+            continue
         try:
             H_image_to_world = np.linalg.inv(H_world_to_image)
         except np.linalg.LinAlgError:

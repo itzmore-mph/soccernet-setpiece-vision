@@ -3,7 +3,7 @@
 Reads outputs/pitch_control_soccana_tvcalib.parquet, computes ICC(2,1) for each
 PC metric using pingouin, derives n_eff, and saves outputs/icc_per_metric.parquet.
 
-This script is SSD-free: it only reads from committed parquets.
+This script reads only committed parquets (no SoccerNet raw video needed).
 """
 
 from pathlib import Path

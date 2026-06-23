@@ -1,12 +1,18 @@
 """Compute GT pitch control over all 33 set-piece clips.
 
+Uses the GT ball (annotation-derived, public) so the reference is independent of the
+pipeline ball. Both inputs are committed public parquets, so this reproduces from
+committed outputs without any raw video. Regenerate gt_ball_positions.parquet with
+dump_gt_ball.py (needs the SoccerNet GSR dataset) only if it is missing.
+
 Reads:
-    outputs/detections_gt_full.parquet  (team col = 'team', all 33 clips)
-    outputs/ball_positions.parquet
+    outputs/detections_gt_full.parquet   (team col = 'team')
+    outputs/gt_ball_positions.parquet    (GT ball per frame)
 
 Writes:
-    outputs/pitch_control_gt_full.parquet  (track='gt', n=33 clips)
+    outputs/pitch_control_gt_full.parquet  (track='gt')
 """
+
 from __future__ import annotations
 
 import sys
@@ -25,8 +31,8 @@ OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
 def main():
     gt = pd.read_parquet(OUTPUTS_DIR / "detections_gt_full.parquet")
-    balls = pd.read_parquet(OUTPUTS_DIR / "ball_positions.parquet")
-    print(f"detections_gt_full: {gt.shape}  |  ball_positions: {balls.shape}")
+    balls = pd.read_parquet(OUTPUTS_DIR / "gt_ball_positions.parquet")
+    print(f"detections_gt_full: {gt.shape}  |  gt_ball_positions: {balls.shape}")
     pc = process_track(gt, track_name="gt", team_col="team", balls=balls)
     out = OUTPUTS_DIR / "pitch_control_gt_full.parquet"
     pc.to_parquet(out, index=False)

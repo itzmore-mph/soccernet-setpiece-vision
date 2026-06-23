@@ -50,7 +50,7 @@ from _pipeline_core import (  # noqa: E402
     project_points,
     reset_tracker,
     track_frame,
-    verify_ssd_mount,
+    verify_soccernet_data,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -120,7 +120,7 @@ def run_optimized_clip(
         if image_id is None:
             continue
 
-        # Read frame exactly once from SSD
+        # Read each SoccerNet video frame exactly once
         frame = load_frame(clip_path, frame_idx)
         if frame is None:
             continue
@@ -230,9 +230,9 @@ def run_optimized_clip(
 
 def main() -> None:
     """Run the optimized pipeline on all 33 set-piece clips."""
-    # --- SSD mount verification ---
-    gsr_root = verify_ssd_mount()
-    print(f"SSD verified: {gsr_root}")
+    # --- SoccerNet GSR data verification ---
+    gsr_root = verify_soccernet_data()
+    print(f"SoccerNet GSR data found: {gsr_root}")
 
     # --- Load homographies ---
     H_lookup = load_tvcalib_lookup(OUTPUTS_DIR)

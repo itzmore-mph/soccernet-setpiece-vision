@@ -16,7 +16,7 @@ Usage:
     python scripts/render_pc_overlay.py                      # all clips
     python scripts/render_pc_overlay.py --clip SNGS-066      # single clip
 
-Requires SSD mounted (reads broadcast JPEGs).
+Requires the local SoccerNet GSR dataset (reads broadcast JPEGs).
 """
 from __future__ import annotations
 
@@ -37,13 +37,13 @@ from _pipeline_core import (
     PITCH_WIDTH_M,
     pitch_control_surface,
     split_attack_defend,
-    verify_ssd_mount,
+    verify_soccernet_data,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures" / "overlay"
-GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
+GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")) / "gamestate-2024"
 
 # Visualization parameters
 GRID_NX, GRID_NY = 60, 40
@@ -341,7 +341,7 @@ def main() -> None:
     parser.add_argument("--clip", default=None, help="Single clip ID, e.g. SNGS-066")
     args = parser.parse_args()
 
-    verify_ssd_mount()
+    verify_soccernet_data()
 
     print("Loading data...")
     dets = pd.read_parquet(OUTPUTS_DIR / "detections_soccana_tvcalib.parquet")

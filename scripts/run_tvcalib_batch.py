@@ -6,7 +6,7 @@ once over the lot, writes outputs/homographies_tvcalib.parquet keyed
 (split, clip_id, frame_idx).
 
 Requirements:
-    - SoccerNet GSR data on SSD (SOCCERNET_LOCAL_DIR env var)
+    - Local SoccerNet GSR dataset (SOCCERNET_LOCAL_DIR env var)
     - TVCalib repo at ../tvcalib/ with its own venv (.venv/) set up:
         cd ../tvcalib
         python3.11 -m venv .venv
@@ -40,11 +40,11 @@ import pandas as pd
 # Ensure sibling scripts are importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _pipeline_core import verify_ssd_mount
+from _pipeline_core import verify_soccernet_data
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TVCALIB_ROOT = PROJECT_ROOT.parent / "tvcalib"
-SSD_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
+GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")) / "gamestate-2024"
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 FRAME_WINDOW = 15
@@ -55,7 +55,7 @@ OUT_DIR = Path("/tmp/tvcalib_batch_out")
 def discover_clips() -> list[dict]:
     rows = []
     for split in SPLITS:
-        split_dir = SSD_ROOT / split
+        split_dir = GSR_ROOT / split
         if not split_dir.is_dir():
             continue
         for clip_dir in sorted(split_dir.iterdir()):
@@ -95,7 +95,7 @@ def stage(clips: list[dict]) -> int:
     for c in clips:
         for frame_idx in range(c["lo"], c["hi"] + 1):
             n_total += 1
-            src = SSD_ROOT / c["split"] / c["clip_id"] / "img1" / f"{frame_idx:06d}.jpg"
+            src = GSR_ROOT / c["split"] / c["clip_id"] / "img1" / f"{frame_idx:06d}.jpg"
             if not src.is_file():
                 continue
             dst = STAGE_DIR / f"{c['split']}__{c['clip_id']}__{frame_idx:06d}.jpg"
@@ -171,7 +171,7 @@ def parse_results(results: dict) -> pd.DataFrame:
 
 
 def main():
-    verify_ssd_mount()
+    verify_soccernet_data()
 
     clips = discover_clips()
     print(f"discovered {len(clips)} set-piece clips")

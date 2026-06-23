@@ -18,11 +18,11 @@ import pandas as pd
 # Ensure sibling scripts are importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _pipeline_core import verify_ssd_mount
+from _pipeline_core import verify_soccernet_data
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
-GSR = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
+GSR = Path(os.getenv("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")) / "gamestate-2024"
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 FRAME_WINDOW = 15
@@ -31,7 +31,7 @@ PITCH_W = 68.0
 
 
 def main():
-    verify_ssd_mount()
+    verify_soccernet_data()
     rows = []
     n_clips = 0
     for split in SPLITS:

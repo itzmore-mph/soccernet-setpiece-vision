@@ -3,7 +3,7 @@
 Shows bounding boxes with team-colored labels, confidence scores, and track IDs.
 Players colored by KMeans team assignment; referees in orange (Soccana class 2).
 
-Reads detections_soccana_tvcalib.parquet, loads broadcast frames from the SSD,
+Reads detections_soccana_tvcalib.parquet, loads broadcast frames from the SoccerNet GSR dataset,
 and writes one MP4 per clip to outputs/figures/annotated/.
 
 Usage:
@@ -24,12 +24,12 @@ import pandas as pd
 # Ensure sibling scripts are importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _pipeline_core import verify_ssd_mount
+from _pipeline_core import verify_soccernet_data
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 FIGURES_DIR = OUTPUTS_DIR / "figures" / "annotated"
-GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "/Volumes/MPH-ExternalStorage/soccernet-gsr")) / "gamestate-2024"
+GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")) / "gamestate-2024"
 
 # Colors (BGR)
 TEAM_COLORS = {
@@ -113,7 +113,7 @@ def render_clip(
 ) -> int:
     clip_path = discover_clip_path(clip_id)
     if clip_path is None:
-        print(f"  [skip] {clip_id}: clip dir not found on SSD")
+        print(f"  [skip] {clip_id}: clip dir not found in SoccerNet GSR dataset")
         return 0
 
     frame_indices = sorted(dets["frame_idx"].unique())
@@ -198,7 +198,7 @@ def main() -> None:
         clip_ids = sorted(df["clip_id"].unique())
 
     print(f"Clips to render: {len(clip_ids)}")
-    verify_ssd_mount()
+    verify_soccernet_data()
 
     for clip_id in clip_ids:
         clip_dets = df[df["clip_id"] == clip_id]
