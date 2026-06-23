@@ -42,13 +42,14 @@ example/
 *.pt
 *.onnx
 
-# Outputs: Soccernet NDA video-derived parquets are excluded
-outputs/detections_soccana_tvcalib.parquet
-outputs/ball_positions.parquet
-outputs/homographies_tvcalib.parquet
+# Outputs: numeric parquets are committable (annotation- and detection-derived
+# coordinates). Per SoccerNet (2026-06-01), annotation-derived data is open source;
+# video-derived numeric outputs are permitted, but raw/rendered video must not be
+# redistributed. So the parquets below are tracked; only actual video media stays out.
+#
 # Exploratory diagnostic scatters (regenerated on demand; not thesis artifacts).
 outputs/figures/diagnostics/
-# SoccerNet-derived demo media (rendered from NDA video frames).
+# SoccerNet video media: rendered from league-copyrighted frames — not redistributable.
 outputs/figures/annotated/
 outputs/figures/overlay/
 outputs/figures/*.mp4

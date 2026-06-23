@@ -6,10 +6,9 @@ per-cell difference, turning the validation from five numbers into a spatial err
 characterisation. It answers "where on the pitch does the pipeline disagree with
 GT" and is expected to localise the error in the attacking third and penalty box.
 
-The pipeline surface needs the NDA video-derived detections, so this script runs
-only where those private parquets are present (locally or in the university
-submission). The OUTPUT is aggregate (mean error per cell, no raw positions) and
-is committed and public, mirroring the verify_reproducibility check-1 pattern.
+The pipeline surface needs the video-derived detections parquet, so this script runs
+only where it is present (locally or after regenerating from the SSD). The OUTPUT is
+aggregate (mean error per cell) and committed: detections in, aggregate out.
 
 Reads:
     outputs/detections_soccana_tvcalib.parquet  (PRIVATE, pipeline detections)

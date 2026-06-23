@@ -30,9 +30,9 @@ Reproducible pipeline that derives Pitch Control from broadcast video without pr
 soccernet-setpiece-vision/
 ├── notebooks/                    # Four CRISP-DM phases
 │   ├── 01_business_and_data_understanding.ipynb
-│   ├── 02_pitch_control.ipynb
+│   ├── 02_modeling_pitch_control.ipynb
 │   ├── 03_evaluation_and_validation.ipynb
-│   └── 04_visualizations.ipynb
+│   └── 04_deployment_visualizations.ipynb
 ├── scripts/                      # Pipeline reproduction scripts
 │   ├── _pipeline_core.py         # Shared module (detection, tracking, team assignment, PC model)
 │   ├── download_soccernet.py     # Data download (idempotent)
@@ -46,24 +46,25 @@ soccernet-setpiece-vision/
 │   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=22)
 │   ├── diagnose_pc_in_third.py   # pc_in_third Simpson's-paradox diagnostic: stratified r by set-piece type
 │   ├── validation_extras.py      # Bland-Altman, skill vs baseline, density, box confusion, temporal stability
-│   ├── spatial_pc_error.py       # Per-cell PC error heatmap (private detections in, public aggregate out)
-│   ├── verify_reproducibility.py # SSD-free: re-derives PC/validation/ICC from parquets
+│   ├── spatial_pc_error.py       # Per-cell PC error heatmap (pipeline detections in, aggregate out)
+│   ├── render_cohort_funnel.py   # Cohort-attrition funnel figure (33 clips → 22 ball-position → 674 PC frames)
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
 ├── tests/                        # pytest unit + property-based tests (hypothesis)
-├── outputs/                      # Public parquets committed; NDA video-derived ones gitignored
-│   ├── *.parquet                 # Committed: PC surfaces, validation, ICC, GT detections, set-pieces
-│   │                             # Gitignored (NDA): detections_soccana_tvcalib, ball_positions, homographies
-│   └── figures/                  # Notebook + validation figures (PNG)
-├── docs/                         # Proposal PDF, thesis PDF, TVCalib setup notes
-├── .github/workflows/            # CI: reproducibility check on every push
-├── report.md                     # Thesis source (pandoc → PDF)
+├── outputs/                      # All numeric parquets committed; only video media is gitignored
+│   ├── *.parquet                 # Committed: PC surfaces, validation, ICC, GT + pipeline detections,
+│   │                             #   ball positions, homographies, set-pieces
+│   └── figures/                  # Committed analysis/validation figures (PNG); rendered video
+│                                 #   media (annotated/, overlay/, *.mp4, *.gif) gitignored
 ├── pyproject.toml                # Project metadata + all dependencies (uv)
 ├── uv.lock                       # Fully pinned, platform-aware lockfile
 ├── .python-version               # Python 3.11
+├── .env.example                  # Template for SOCCERNET_PASSWORD / SOCCERNET_LOCAL_DIR
 ├── CITATION.cff
 └── LICENSE
 ```
+
+> The thesis document (PDF/DOCX) and the project proposal are not in this public repo; they are delivered separately as the closed university submission. Only the TVCalib setup notes under `docs/tvcalib-setup/` are tracked here, since they document the external calibration step.
 
 ---
 
@@ -74,7 +75,7 @@ soccernet-setpiece-vision/
 - **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
 - **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
-**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). It is **gitignored (NDA)** because the matrices are fit to NDA video frames, so it is not in the public repo; it ships only in the closed university submission and is required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** — notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
+**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). These are numeric matrices and are committable (see Data & Licensing below), but they must be regenerated from the SSD via TVCalib — they are not bundled here yet. They are required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** — notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
 
 ---
 
@@ -145,18 +146,17 @@ uv run python scripts/run_tvcalib_batch.py
 
 ## Quick Start (from committed outputs, no SSD needed)
 
-Notebooks 02 and 03 read entirely from committed Parquet files and require no video data.
-Notebook 04 requires SSD (broadcast frames) for its visualizations — skip or run interactively and skip Section 4–8 cells if no SSD is available.
+All four notebooks run top-to-bottom without the SSD. Notebooks 02 and 03 reproduce the full Pitch Control and validation analysis from the committed Parquet files. Notebook 02 recomputes GT Pitch Control live from committed GT detections and loads the pipeline side from the committed PC parquet when the raw pipeline detections are absent. Notebook 04 only renders broadcast overlays, so without the SSD frames and pipeline detections it runs but its render cells skip cleanly (no figures produced); mount the SSD to generate the visualizations.
 
 ```bash
 # 1. Install dependencies (Python 3.11 required)
 uv sync
 
 # 2. Run analysis notebooks (order matters)
-uv run uv run jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
-uv run uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
-# nb04 requires SSD — run interactively or only if SSD is mounted:
-uv run uv run jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+# nb04 runs SSD-free but its render cells skip without SSD frames + pipeline detections:
+uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
 
 # 3. Run validation table (from committed pipeline outputs)
 uv run python scripts/ks_table_tvcalib.py
@@ -231,13 +231,13 @@ uv run python scripts/compute_icc.py
 uv run python scripts/clip_level_validation.py
 uv run python scripts/diagnose_pc_in_third.py
 uv run python scripts/validation_extras.py
-uv run python scripts/spatial_pc_error.py   # needs private detections; output is public aggregate
+uv run python scripts/spatial_pc_error.py   # needs pipeline detections; output is an aggregate
 ```
 
 ### 7. Run notebook 02 — Pitch Control
 
 ```bash
-uv run jupyter nbconvert --to notebook --execute notebooks/02_pitch_control.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
 ```
 
 ### 8. Run notebook 03 — Evaluation & Validation
@@ -249,7 +249,7 @@ uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_val
 ### 9. Run notebook 04 — Visualizations
 
 ```bash
-uv run jupyter nbconvert --to notebook --execute notebooks/04_visualizations.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
 ```
 
 Requires SSD (reads broadcast frames for overlays).
@@ -269,10 +269,16 @@ This project supports two levels of reproducibility:
 
 ### Level 1: From Committed Parquets (No SSD Required)
 
-Validation statistics, ICC values, and figures reproduce identically from the committed public Parquet files, and CI re-derives them on every push (`verify_reproducibility.py` checks 2 and 3). The Pitch Control surfaces themselves can also be re-derived, but only where the NDA video-derived inputs (Soccana detections, ball positions) are present — locally with the SSD or in the university submission; that check (check 1) SKIPs in public CI by design.
+Pitch Control, validation statistics, ICC values, and figures reproduce from the committed public Parquet files. Notebooks 02 and 03 run top-to-bottom without the SSD, and the validation/ICC scripts below re-derive the published tables from the committed PC parquets. The video-derived inputs (Soccana detections, ball positions) are not required for this level.
 
 ```bash
-uv run python scripts/verify_reproducibility.py
+uv run jupyter nbconvert --to notebook --execute notebooks/02_modeling_pitch_control.ipynb --inplace
+uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_validation.ipynb --inplace
+uv run python scripts/ks_table_tvcalib.py
+uv run python scripts/compute_icc.py
+uv run python scripts/clip_level_validation.py
+uv run python scripts/diagnose_pc_in_third.py
+uv run python scripts/validation_extras.py
 ```
 
 ### Level 2: Full End-to-End (SSD Required)
@@ -319,6 +325,18 @@ See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
 ---
 
+## Data & Licensing
+
+The code in this repository is MIT-licensed. Data redistribution follows guidance the SoccerNet team provided in writing (2026-06-01):
+
+- **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source. Outputs derived solely from them — GT detections, validation, ICC, set-pieces — are committed freely.
+- **Numeric pipeline outputs** derived from the video (Soccana detections, ball positions, TVCalib homographies, Pitch Control surfaces) are committable. They contain coordinates and matrices, not video. Note these were generated from league-copyrighted frames and theoretically carry the same copyright, so they are shared for academic, non-commercial use only.
+- **Raw and rendered video** is **not redistributable.** Broadcast frames are never committed, and annotated clips / GIFs / MP4s rendered from those frames are gitignored. Short (≤5 s) annotated excerpts may be shared off-repo as academic fair use, but are kept out of the public repository.
+
+Use is academic and non-commercial. See `LICENSE` for the code license.
+
+---
+
 ## License
 
-[MIT License](LICENSE).
+[MIT License](LICENSE) (code only - see Data & Licensing above for data terms).
