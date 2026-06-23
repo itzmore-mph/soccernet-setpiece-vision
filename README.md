@@ -14,11 +14,11 @@ Reproducible pipeline that derives Pitch Control from broadcast video without pr
 
 **Pipeline stages (single video pass per clip, frames 1–250):**
 1. Player + Referee detection — Soccana (YOLOv11n, football-finetuned), conf=0.25, TTA, agnostic NMS; classes 0 (Player) and 2 (Referee)
-2. Ball detection — Soccana class=1, conf=0.15; gap interpolation up to 5 frames; frame-1 priority for set-piece resting position
-3. Multi-object tracking — ByteTrack for persistent IDs; separate tracker instances for players and ball
-4. Team assignment — global KMeans (k=3) on per-track mean HSV across 250-frame fitting window; cross-frame mode consensus per `track_id`; referees assigned `team=-1`
-5. Camera calibration — TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography; pitch-bounds filtering [0–105 m × 0–68 m]
-6. Pitch Control — Laurie Shaw time-to-intercept model (zero-velocity, static-frame); 60×40 grid on 105 m × 68 m pitch; frames 1–31 only
+2. Ball detection - Soccana class=1, conf=0.15; gap interpolation up to 5 frames; frame-1 priority for set-piece resting position
+3. Multi-object tracking - ByteTrack for persistent IDs; separate tracker instances for players and ball
+4. Team assignment - global KMeans (k=3) on per-track mean HSV across 250-frame fitting window; cross-frame mode consensus per `track_id`; referees assigned `team=-1`
+5. Camera calibration - TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography; pitch-bounds filtering [0–105 m × 0–68 m]
+6. Pitch Control - Laurie Shaw time-to-intercept model (zero-velocity, static-frame); 60×40 grid on 105 m × 68 m pitch; frames 1–31 only
 
 **Validation:** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
 
@@ -70,12 +70,12 @@ soccernet-setpiece-vision/
 
 ## Prerequisites
 
-- **Python 3.11** — install via any Python version manager
-- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** — fast Python package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- **SoccerNet GSR data** on external SSD (~35 GB) — only needed for full reproduction
-- **Internet** — first run downloads Soccana weights from HuggingFace (~5 MB, cached)
+- **Python 3.11** - install via any Python version manager
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)** - fast Python package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- **SoccerNet GSR data** on external SSD (~35 GB) - only needed for full reproduction
+- **Internet** - first run downloads Soccana weights from HuggingFace (~5 MB, cached)
 
-**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). These are numeric matrices and are committable (see Data & Licensing below), but they must be regenerated from the SSD via TVCalib — they are not bundled here yet. They are required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** — notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
+**Note on homographies:** `outputs/homographies_tvcalib.parquet` holds pre-computed camera calibration matrices for all 33 clips (33 × 31 frames = 1,023 homographies). These are numeric matrices and are committable (see Data & Licensing below), but they must be regenerated from the SSD via TVCalib - they are not bundled here yet. They are required only for the SSD-path pipeline (`run_optimized_pipeline.py`). **You do not need TVCalib to reproduce the public analysis** - notebooks 02–04 and the validation/ICC scripts read the committed PC parquets directly. TVCalib is needed only to regenerate the homographies from scratch.
 
 ---
 
@@ -329,7 +329,7 @@ See [CITATION.cff](CITATION.cff) for machine-readable citation metadata.
 
 The code in this repository is MIT-licensed. Data redistribution follows guidance the SoccerNet team provided in writing (2026-06-01):
 
-- **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source. Outputs derived solely from them — GT detections, validation, ICC, set-pieces — are committed freely.
+- **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source. Outputs derived solely from them. GT detections, validation, ICC, set-pieces are committed freely.
 - **Numeric pipeline outputs** derived from the video (Soccana detections, ball positions, TVCalib homographies, Pitch Control surfaces) are committable. They contain coordinates and matrices, not video. Note these were generated from league-copyrighted frames and theoretically carry the same copyright, so they are shared for academic, non-commercial use only.
 - **Raw and rendered video** is **not redistributable.** Broadcast frames are never committed, and annotated clips / GIFs / MP4s rendered from those frames are gitignored. Short (≤5 s) annotated excerpts may be shared off-repo as academic fair use, but are kept out of the public repository.
 
