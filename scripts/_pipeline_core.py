@@ -24,7 +24,39 @@ FITTING_WINDOW = 250
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 YOLO_CONF = 0.25
-DEVICE = os.getenv("TORCH_DEVICE", "mps")
+
+
+def resolve_device() -> str:
+    """Return the torch device string to run inference on.
+
+    Honors an explicit ``TORCH_DEVICE`` env override (e.g. ``cpu``, ``cuda``,
+    ``mps``). With no override, auto-detects in order CUDA -> MPS -> CPU so a
+    plain Windows/Linux machine (no MPS) falls back to ``cpu`` instead of
+    failing on the Apple-Silicon default. Degrades to ``cpu`` if torch is
+    unavailable.
+
+    Returns
+    -------
+    str
+        One of ``"cuda"``, ``"mps"`` or ``"cpu"``, or the verbatim
+        ``TORCH_DEVICE`` value when that env var is set.
+    """
+    override = os.getenv("TORCH_DEVICE")
+    if override:
+        return override
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
+DEVICE = resolve_device()
 
 T_CENTRED_TO_TOPLEFT = np.array([
     [1.0, 0.0, PITCH_LENGTH_M / 2],

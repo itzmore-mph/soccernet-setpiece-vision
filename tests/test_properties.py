@@ -360,7 +360,10 @@ def test_soccernet_data_rejects_invalid(path_suffix):
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         env_file = Path(tmp_dir) / ".env"
-        env_file.write_text(f"SOCCERNET_LOCAL_DIR={fake_path}\n")
+        # Write UTF-8 explicitly: load_dotenv reads as UTF-8, and on Windows
+        # Path.write_text defaults to cp1252, which can't encode non-ASCII
+        # path suffixes hypothesis generates.
+        env_file.write_text(f"SOCCERNET_LOCAL_DIR={fake_path}\n", encoding="utf-8")
 
         with pytest.raises(SystemExit) as exc_info:
             verify_soccernet_data(str(env_file))

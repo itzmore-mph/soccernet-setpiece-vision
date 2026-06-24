@@ -54,7 +54,7 @@ soccernet-setpiece-vision/
 ├── tests/                        # pytest unit + property-based tests (hypothesis)
 ├── outputs/                      # Public numeric parquets committed; private video-derived ones gitignored
 │   ├── *.parquet                 # Committed (public): PC surfaces, validation, ICC, GT detections,
-│   │                             #   GT ball, spatial error, set-pieces. Gitignored (private, NDA):
+│   │                             #   GT ball, spatial error, set-pieces. Gitignored (video-derived,
 │   │                             #   Soccana detections, pipeline ball positions, homographies
 │   └── figures/                  # Committed analysis/validation figures (PNG); rendered video
 │                                 #   media (annotated/, overlay/, *.mp4, *.gif) gitignored
@@ -150,7 +150,7 @@ uv run python scripts/run_tvcalib_batch.py
 
 There are two reproduction paths. **Path A** verifies all published results from the committed parquets and needs no raw video, no TVCalib, and none of the private video-derived parquets. **Path B** reproduces everything end-to-end from the raw SoccerNet GSR video (a local copy of the dataset).
 
-Why two paths: the three video-derived parquets (`detections_soccana_tvcalib`, `ball_positions`, `homographies_tvcalib`) are NDA-protected and not in the public repo (see Data & Licensing). Their *committed* downstream outputs (`pitch_control_*`, validation, ICC, spatial error) are public, so the analysis layer reproduces without them.
+Why two paths: the three video-derived parquets (`detections_soccana_tvcalib`, `ball_positions`, `homographies_tvcalib`) are derived from league-copyrighted video and not in the public repo (see Data & Licensing). Their *committed* downstream outputs (`pitch_control_*`, validation, ICC, spatial error) are public, so the analysis layer reproduces without them.
 
 > **Thesis submission (offline ZIP, all parquets included).** The university submission is a folder that bundles **every** parquet, including the three video-derived ones, but no raw video (too large, NDA). Graders need no raw video, no `.env`, and no internet beyond `uv sync`. The committed Pitch Control parquets are the authoritative results; the chain below re-derives every validation table, ICC, diagnostic, and the spatial error map from them and reproduces the committed outputs byte-for-byte:
 >

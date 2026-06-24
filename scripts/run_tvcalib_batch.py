@@ -20,7 +20,8 @@ Requirements:
       Segmentation checkpoint: tvcalib/data/segment_localization/train_59.pt
 
 Idempotent on stage (skips already-copied frames). TVCalib re-runs every call;
-delete /tmp/tvcalib_batch_out/calib.json to force re-stage only.
+delete <tempdir>/tvcalib_batch_out/calib.json to force re-stage only. The temp
+location defaults to the OS temp dir (cross-platform); override with TVCALIB_TMP.
 
 Writes:
     outputs/homographies_tvcalib.parquet
@@ -32,6 +33,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -48,8 +50,9 @@ GSR_ROOT = Path(os.getenv("SOCCERNET_LOCAL_DIR", "data/soccernet-gsr")) / "games
 SPLITS = ["train", "valid", "test", "challenge"]
 TARGET_ACTIONS = {"Corner", "Direct free-kick"}
 FRAME_WINDOW = 15
-STAGE_DIR = Path("/tmp/tvcalib_batch")
-OUT_DIR = Path("/tmp/tvcalib_batch_out")
+TMP_ROOT = Path(os.getenv("TVCALIB_TMP", tempfile.gettempdir()))
+STAGE_DIR = TMP_ROOT / "tvcalib_batch"
+OUT_DIR = TMP_ROOT / "tvcalib_batch_out"
 
 
 def discover_clips() -> list[dict]:
