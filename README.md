@@ -6,6 +6,26 @@ Master's Final Project, MSc AI Applied to Sports, Sports Data Campus
 
 Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![uv](https://img.shields.io/badge/managed%20by-uv-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-CPU%20deterministic-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Ultralytics YOLO](https://img.shields.io/badge/YOLOv11n-Ultralytics-00FFFF?logo=ultralytics&logoColor=black)](https://github.com/ultralytics/ultralytics)
+[![Tests](https://img.shields.io/badge/tests-pytest%20%2B%20hypothesis-0A9EDC?logo=pytest&logoColor=white)](tests/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+<table>
+<tr>
+<td width="55%"><img src="outputs/figures/anim_corner_SNGS-116.gif" alt="Pitch Control overlay on a corner-kick broadcast clip"></td>
+<td width="45%"><img src="outputs/figures/deploy_minimap_pc_ssd_free_pipeline_SNGS-025.png" alt="Pitch Control surface rendered as a 2D minimap"></td>
+</tr>
+<tr>
+<td><sub>Pipeline output overlaid on the original broadcast feed (corner kick, SNGS-116)</sub></td>
+<td><sub>Same surface rendered as a standalone tactical minimap (free kick, SNGS-025)</sub></td>
+</tr>
+</table>
+
+**Results at a glance** — 33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames after ball-position filtering): ICC(2,1) = **0.89–0.93** across all five Pitch Control metrics, clip-level bias confirmed via bootstrap CI + Wilcoxon signed-rank test. All committed numbers are bit-reproducible on CPU with fixed seeds (`_pipeline_core.set_deterministic`).
+
 ---
 
 ## Overview
