@@ -15,12 +15,10 @@ Author: Moritz Philipp Haaf | Submission: 30 June 2026
 
 <table>
 <tr>
-<td width="55%"><img src="outputs/figures/anim_corner_SNGS-116.gif" alt="Pitch Control overlay on a corner-kick broadcast clip"></td>
-<td width="45%"><img src="outputs/figures/deploy_minimap_pc_ssd_free_pipeline_SNGS-025.png" alt="Pitch Control surface rendered as a 2D minimap"></td>
+<td width="100%"><img src="outputs/figures/anim_corner_SNGS-116.gif" alt="Pitch Control overlay on a corner-kick broadcast clip"></td>
 </tr>
 <tr>
 <td><sub>Pipeline output overlaid on the original broadcast feed (corner kick, SNGS-116)</sub></td>
-<td><sub>Same surface rendered as a standalone tactical minimap (free kick, SNGS-025)</sub></td>
 </tr>
 </table>
 
