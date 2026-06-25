@@ -1,19 +1,19 @@
 """Clip-level validation: the inferential unit the ICC/n_eff analysis demands.
 
-The frame-level tables in ``ks_table_tvcalib.py`` treat 674 pipeline frames as
-independent, but ICC(2,1) = 0.83-0.92 shows the ~31 frames of each set-piece clip
-are near-replicates (n_eff ~ 24-26, roughly one observation per clip). Testing on
+The frame-level tables in ``ks_table_tvcalib.py`` treat 651 pipeline frames as
+independent, but ICC(2,1) = 0.89-0.93 shows the ~31 frames of each set-piece clip
+are near-replicates (n_eff ~ 22-24, roughly one observation per clip). Testing on
 frames is therefore pseudoreplication. This script collapses each clip to a single
-value per metric (the within-clip mean), pairs the 22 clips common to the pipeline
+value per metric (the within-clip mean), pairs the 21 clips common to the pipeline
 and GT cohorts, and runs the validation at the clip level:
 
   - paired bias (mean of per-clip pipeline-minus-GT differences),
-  - Wilcoxon signed-rank test (paired, distribution-free; appropriate at n=22),
-  - Pearson and Spearman correlation on the 22 clip means,
+  - Wilcoxon signed-rank test (paired, distribution-free; appropriate at n=21),
+  - Pearson and Spearman correlation on the 21 clip means,
   - a percentile bootstrap 95% CI on the bias (deterministic seed for reproducibility).
 
 Reads:
-    outputs/pitch_control_soccana_tvcalib.parquet  (pipeline, 22 clips)
+    outputs/pitch_control_soccana_tvcalib.parquet  (pipeline, 21 clips)
     outputs/pitch_control_gt_full.parquet           (GT reference, 31 clips)
 
 Writes:

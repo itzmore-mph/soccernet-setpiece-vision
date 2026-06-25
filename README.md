@@ -44,11 +44,11 @@ soccernet-setpiece-vision/
 │   ├── run_pc_gt_full.py         # Pitch control (GT reference; uses GT ball)
 │   ├── ks_table_tvcalib.py       # Frame-level distributional validation table + figure
 │   ├── compute_icc.py            # ICC(2,1) + effective sample size per PC metric
-│   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=22)
+│   ├── clip_level_validation.py  # Clip-level paired validation: bias + bootstrap CI + Wilcoxon (n=21)
 │   ├── diagnose_pc_in_third.py   # pc_in_third Simpson's-paradox diagnostic: stratified r by set-piece type
 │   ├── validation_extras.py      # Bland-Altman, skill vs baseline, density, box confusion, temporal stability
 │   ├── spatial_pc_error.py       # Per-cell PC error heatmap (pipeline detections in, aggregate out)
-│   ├── render_cohort_funnel.py   # Cohort-attrition funnel figure (33 clips → 22 ball-position → 674 PC frames)
+│   ├── render_cohort_funnel.py   # Cohort-attrition funnel figure (33 clips → 21 ball-position → 651 PC frames)
 │   ├── render_gantt.py           # CRISP-DM Gantt timeline figure (report Section 4.2, Figure 1)
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
 │   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
