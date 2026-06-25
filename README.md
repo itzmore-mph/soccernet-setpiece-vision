@@ -22,20 +22,22 @@ Author: Moritz Philipp Haaf, BSc MA
 </tr>
 </table>
 
-**Results at a glance** — 33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames after ball-position filtering): ICC(2,1) = **0.89–0.93** across all five Pitch Control metrics, clip-level bias confirmed via bootstrap CI + Wilcoxon signed-rank test. All committed numbers are bit-reproducible on CPU with fixed seeds (`_pipeline_core.set_deterministic`).
+**Results at a glance**: 
+
+33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames after ball-position filtering): ICC(2,1) = **0.89–0.93** across all five Pitch Control metrics, clip-level bias confirmed via bootstrap CI + Wilcoxon signed-rank test. All committed numbers are bit-reproducible on CPU with fixed seeds (`_pipeline_core.set_deterministic`).
 
 ---
 
 ## Overview
 
-Reproducible pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static and all relevant players are in frame.
+Reproducible pipeline that derives Pitch Control from broadcast video without proprietary tracking hardware or ground-truth pitch annotations. Targets set-piece situations (corners, direct free kicks) where broadcast cameras are near-static, and all relevant players are in frame.
 
 **Pipeline stages (single video pass per clip, frames 1–250):**
 1. Player + Referee detection — Soccana (YOLOv11n, football-finetuned), conf=0.25, TTA, agnostic NMS; classes 0 (Player) and 2 (Referee)
 2. Ball detection - Soccana class=1, conf=0.15; gap interpolation up to 5 frames; frame-1 priority for set-piece resting position
 3. Multi-object tracking - ByteTrack for persistent IDs; separate tracker instances for players and ball
 4. Team assignment - global KMeans (k=3) on per-track mean HSV across 250-frame fitting window; cross-frame mode consensus per `track_id`; referees assigned `team=-1`
-5. Camera calibration - TVCalib (Theiner & Ewerth, WACV 2023) autonomous homography; pitch-bounds filtering [0–105 m × 0–68 m]
+5. Camera calibration - TVCalib (Theiner & Ewerth, WACV 2023), autonomous homography; pitch-bounds filtering [0–105 m × 0–68 m]
 6. Pitch Control - Laurie Shaw time-to-intercept model (zero-velocity, static-frame); 60×40 grid on 105 m × 68 m pitch; frames 1–31 only
 
 **Validation:** Distributional comparison (KS test, histogram overlap) plus per-frame paired statistics against SoccerNet GSR ground-truth annotations on 33 set-piece clips.
