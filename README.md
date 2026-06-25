@@ -4,7 +4,7 @@
 
 Master's Final Project, MSc AI Applied to Sports, Sports Data Campus
 
-Author: Moritz Philipp Haaf | Submission: 30 June 2026
+Author: Moritz Philipp Haaf, BSc MA
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20by-uv-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
