@@ -1,0 +1,68 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# Jupyter
+*.ipynb_checkpoints
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+.kiro/
+CLAUDE.md
+change_ledger.md
+pyrightconfig.json
+.claude/
+
+# Report drafting helpers, not repo deliverables
+report.md
+report.docx
+
+# Conda / venv (env lives in py311-dev outside repo)
+.venv/
+venv/
+
+# Data: never commit raw SoccerNet GSR data (downloaded locally, large, league-copyrighted).
+/Volumes/
+data/raw/
+data/interim/
+data/soccernet-gsr/
+example/
+/docs
+
+# Large model weights (auto-downloaded to ~/.cache)
+*.pt
+*.onnx
+
+# Outputs split (per SoccerNet email, 2026-06-01):
+#   - Annotation-derived + aggregate parquets are open source and committed.
+#   - Video-derived parquets inherit the leagues' video copyright and may NOT be
+#     redistributed, so they are gitignored and ship only in the closed university
+#     submission. Keep these three OUT of the public repo.
+outputs/detections_soccana_tvcalib.parquet
+outputs/ball_positions.parquet
+outputs/homographies_tvcalib.parquet
+#
+# Exploratory diagnostic scatters (regenerated on demand; not thesis artifacts).
+outputs/figures/diagnostics/
+
+# SoccerNet video media (annotated clips/gifs/stills, ~4-5s, overlay on broadcast
+# frames): SoccerNet confirmed in writing (2026-06-01, Point 3) that short
+# (~5s) academic, non-commercial annotated clips are fair use and acceptable
+# to publish. Detection/ball/homography PARQUETS (numeric, video-derived) are
+# a separate case (Point 2) and stay gitignored above — this exemption is for
+# rendered media only.

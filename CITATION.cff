@@ -1,0 +1,122 @@
+cff-version: 1.2.0
+message: "If you use this pipeline, please cite the following works."
+title: "Pitch Control from Broadcast Video: A Computer Vision Pipeline for Set-Piece Analysis"
+authors:
+  - family-names: Haaf
+    given-names: Moritz Philipp
+date-released: 2026-06-30
+version: "1.0.0"
+license: MIT
+repository-code: "https://github.com/itzmore-mph/soccernet-setpiece-vision"
+
+references:
+
+  - type: conference-paper
+    title: "SoccerNet Game State Reconstruction: End-to-End Athlete Tracking and Identification on a Minimap"
+    authors:
+      - family-names: Somers
+        given-names: Vladimir
+      - family-names: Joos
+        given-names: Victor
+      - family-names: Giancola
+        given-names: Silvio
+      - family-names: Cioppa
+        given-names: Anthony
+      - family-names: Ghasemzadeh
+        given-names: Seyed Abolfazl
+      - family-names: Magera
+        given-names: Floriane
+      - family-names: Standaert
+        given-names: Baptiste
+      - family-names: Mansourian
+        given-names: Amir Mohammad
+      - family-names: Zhou
+        given-names: Xin
+      - family-names: Kasaei
+        given-names: Shohreh
+      - family-names: Ghanem
+        given-names: Bernard
+      - family-names: Alahi
+        given-names: Alexandre
+      - family-names: Van Droogenbroeck
+        given-names: Marc
+      - family-names: De Vleeschouwer
+        given-names: Christophe
+    collection-title: "Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)"
+    year: 2024
+    month: 6
+    location:
+      name: "Seattle, WA, USA"
+
+  - type: software
+    title: "Friends of Tracking: Pitch Control implementation"
+    authors:
+      - family-names: Shaw
+        given-names: Laurie
+    year: 2020
+    repository-code: "https://github.com/Friends-of-Tracking-Data-FoTD/LaurieOnTracking"
+
+  - type: conference-paper
+    title: "ByteTrack: Multi-Object Tracking by Associating Every Detection Box"
+    authors:
+      - family-names: Zhang
+        given-names: Yifu
+      - family-names: Sun
+        given-names: Peize
+      - family-names: Jiang
+        given-names: Yi
+      - family-names: Yu
+        given-names: Dongdong
+      - family-names: Weng
+        given-names: Fucheng
+      - family-names: Yuan
+        given-names: Zehuan
+      - family-names: Luo
+        given-names: Ping
+      - family-names: Liu
+        given-names: Wenyu
+      - family-names: Wang
+        given-names: Xinggang
+    collection-title: "Proceedings of the European Conference on Computer Vision (ECCV)"
+    year: 2022
+
+  - type: software
+    title: "Ultralytics YOLOv8"
+    authors:
+      - family-names: Jocher
+        given-names: Glenn
+    year: 2023
+    repository-code: "https://github.com/ultralytics/ultralytics"
+
+  - type: software
+    title: "StatsBomb Open Data"
+    authors:
+      - name: "StatsBomb"
+    year: 2024
+    repository-code: "https://github.com/statsbomb/open-data"
+
+  - type: conference-paper
+    title: "TVCalib: Camera Calibration for Sports Field Registration in Soccer"
+    authors:
+      - family-names: Theiner
+        given-names: Jonas
+      - family-names: Ewerth
+        given-names: Ralph
+    collection-title: "Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)"
+    year: 2023
+
+  - type: software
+    title: "Soccana: YOLOv11n football detector"
+    authors:
+      - family-names: Jain
+        given-names: Adit
+    year: 2024
+    url: "https://huggingface.co/Adit-jain/soccana"
+
+  - type: conference-paper
+    title: "Beyond Expected Goals"
+    authors:
+      - family-names: Spearman
+        given-names: William
+    collection-title: "MIT Sloan Sports Analytics Conference"
+    year: 2018
