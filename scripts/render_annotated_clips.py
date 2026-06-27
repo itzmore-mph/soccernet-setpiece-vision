@@ -24,7 +24,7 @@ import pandas as pd
 # Ensure sibling scripts are importable
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _pipeline_core import verify_soccernet_data
+from _pipeline_core import PITCH_LENGTH_M, PITCH_WIDTH_M, ensure_h264_playback, verify_soccernet_data
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
@@ -50,6 +50,72 @@ def discover_clip_path(clip_id: str) -> Path | None:
         if p.is_dir():
             return p
     return None
+
+
+def remap_other_cluster(dets: pd.DataFrame) -> pd.DataFrame:
+    """Reassign the KMeans "other" cluster (team_kmeans == 2) to Team A/B.
+
+    KMeans is fit with k=3 and should collapse to two real teams plus
+    referees, but on some clips a third jersey-colour cluster survives among
+    non-referee detections (e.g. SNGS-122: 214/588 rows). For display only,
+    each such row is assigned to whichever of team 0 / team 1 has the nearer
+    mean HSV centroid in that frame, since the root cause is jersey-colour
+    clustering, not pitch position. Does not touch the source parquet.
+    """
+    dets = dets.copy()
+    hsv_cols = ["hsv_h", "hsv_s", "hsv_v"]
+
+    for fi in dets["frame_idx"].unique():
+        frame_mask = dets["frame_idx"] == fi
+        other_mask = frame_mask & (dets["team_kmeans"] == 2) & ~dets["is_referee"]
+        if not other_mask.any():
+            continue
+        centroids = {}
+        for t in (0, 1):
+            team_rows = dets[frame_mask & (dets["team_kmeans"] == t) & ~dets["is_referee"]]
+            if not team_rows.empty:
+                centroids[t] = team_rows[hsv_cols].mean().to_numpy()
+        if len(centroids) < 2:
+            continue
+        for idx in dets.index[other_mask]:
+            hsv = dets.loc[idx, hsv_cols].to_numpy(dtype=float)
+            dists = {t: np.linalg.norm(hsv - c) for t, c in centroids.items()}
+            dets.loc[idx, "team_kmeans"] = min(dists, key=dists.get)
+
+    return dets
+
+
+def load_homography_lookup() -> dict[tuple[str, str, int], np.ndarray]:
+    df = pd.read_parquet(OUTPUTS_DIR / "homographies_tvcalib.parquet")
+    out: dict = {}
+    for _, r in df.iterrows():
+        H = np.array(
+            [
+                [r["h00"], r["h01"], r["h02"]],
+                [r["h10"], r["h11"], r["h12"]],
+                [r["h20"], r["h21"], r["h22"]],
+            ]
+        )
+        out[(r["split"], r["clip_id"], int(r["frame_idx"]))] = H
+    return out
+
+
+def project_ball_to_image(ball_x_m: float, ball_y_m: float, H_world_to_image: np.ndarray) -> tuple[float, float] | None:
+    x_c, y_c = ball_x_m - PITCH_LENGTH_M / 2, ball_y_m - PITCH_WIDTH_M / 2
+    proj = H_world_to_image @ np.array([x_c, y_c, 1.0])
+    if abs(proj[2]) < 1e-8:
+        return None
+    return (proj[0] / proj[2], proj[1] / proj[2])
+
+
+def draw_ball(frame: np.ndarray, ball_xy_px: tuple[float, float]) -> None:
+    bx, by = int(ball_xy_px[0]), int(ball_xy_px[1])
+    h, w = frame.shape[:2]
+    if not (0 <= bx < w and 0 <= by < h):
+        return
+    cv2.circle(frame, (bx, by), 10, (0, 0, 0), 3)
+    cv2.circle(frame, (bx, by), 10, (0, 255, 255), -1)
+    cv2.circle(frame, (bx, by), 10, (255, 255, 255), 1)
 
 
 def draw_detection_box(
@@ -112,6 +178,8 @@ def render_clip(
     clip_id: str,
     dets: pd.DataFrame,
     out_path: Path,
+    balls: pd.DataFrame | None = None,
+    H_lookup: dict | None = None,
 ) -> int:
     clip_path = discover_clip_path(clip_id)
     if clip_path is None:
@@ -139,6 +207,15 @@ def render_clip(
     frame_dets = dets.groupby("frame_idx")
     written = 0
     action_class = dets["action_class"].iloc[0] if not dets.empty else "unknown"
+    split = dets["split"].iloc[0] if not dets.empty else None
+
+    ball_xy_m = None
+    if balls is not None:
+        ball_row = balls[balls["clip_id"] == clip_id]
+        x_col = "ball_x_m" if "ball_x_m" in ball_row.columns else "x_pitch"
+        y_col = "ball_y_m" if "ball_y_m" in ball_row.columns else "y_pitch"
+        if not ball_row.empty and pd.notna(ball_row[x_col].iloc[0]):
+            ball_xy_m = (float(ball_row[x_col].iloc[0]), float(ball_row[y_col].iloc[0]))
 
     for fi in frame_indices:
         img_path = clip_path / "img1" / f"{fi:06d}.jpg"
@@ -169,12 +246,21 @@ def render_clip(
                 elif team == 1:
                     n_b += 1
 
+        if ball_xy_m is not None and H_lookup is not None:
+            H = H_lookup.get((split, clip_id, fi))
+            if H is not None:
+                ball_px = project_ball_to_image(ball_xy_m[0], ball_xy_m[1], H)
+                if ball_px is not None:
+                    draw_ball(frame, ball_px)
+
         draw_info_bar(frame, clip_id, action_class, fi, n_a, n_b, n_refs)
 
         writer.write(frame)
         written += 1
 
     writer.release()
+    if written:
+        ensure_h264_playback(out_path)
     return written
 
 
@@ -204,10 +290,14 @@ def main() -> None:
     print(f"Clips to render: {len(clip_ids)}")
     verify_soccernet_data()
 
+    balls_path = OUTPUTS_DIR / "ball_positions.parquet"
+    balls = pd.read_parquet(balls_path) if balls_path.is_file() else None
+    H_lookup = load_homography_lookup() if (OUTPUTS_DIR / "homographies_tvcalib.parquet").is_file() else None
+
     for clip_id in clip_ids:
-        clip_dets = df[df["clip_id"] == clip_id]
+        clip_dets = remap_other_cluster(df[df["clip_id"] == clip_id])
         out_path = FIGURES_DIR / f"{clip_id}_detections.mp4"
-        n = render_clip(clip_id, clip_dets, out_path)
+        n = render_clip(clip_id, clip_dets, out_path, balls=balls, H_lookup=H_lookup)
         if n:
             print(f"  {clip_id}: {n} frames → {out_path.relative_to(PROJECT_ROOT)}")
 

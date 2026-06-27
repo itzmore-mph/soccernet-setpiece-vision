@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -1282,3 +1283,39 @@ def process_track(df: pd.DataFrame, track_name: str, team_col: str, balls: pd.Da
             }
         )
     return pd.DataFrame(out)
+
+
+def ensure_h264_playback(path: Path) -> None:
+    """Re-encode an OpenCV-written MP4 to H.264/yuv420p in place.
+
+    cv2.VideoWriter's "mp4v" fourcc silently writes the legacy FMP4 codec on
+    macOS. FMP4 decodes correctly in OpenCV/ffmpeg but renders as solid green
+    in QuickTime, Preview, and PowerPoint. Re-encoding fixes playback without
+    altering pixel content. No-op if ffmpeg is not installed.
+    """
+    tmp = path.with_suffix(".tmp.mp4")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(path),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-crf",
+                "18",
+                "-movflags",
+                "+faststart",
+                "-loglevel",
+                "error",
+                str(tmp),
+            ],
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        tmp.unlink(missing_ok=True)
+        return
+    tmp.replace(path)

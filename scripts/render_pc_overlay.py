@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _pipeline_core import (
     PITCH_LENGTH_M,
     PITCH_WIDTH_M,
+    ensure_h264_playback,
     pitch_control_surface,
     split_attack_defend,
     verify_soccernet_data,
@@ -363,6 +364,8 @@ def render_clip(
         written += 1
 
     writer.release()
+    if written:
+        ensure_h264_playback(out_path)
     return written
 
 

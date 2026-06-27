@@ -15,10 +15,10 @@ Author: Moritz Philipp Haaf, BSc MA
 
 <table>
 <tr>
-<td width="100%"><img src="outputs/figures/anim_corner_SNGS-116.gif" alt="Pitch Control overlay on a corner-kick broadcast clip"></td>
+<td width="100%"><img src="outputs/figures/anim_corner_SNGS-040.gif" alt="Pitch Control overlay on a corner-kick broadcast clip"></td>
 </tr>
 <tr>
-<td><sub>Pipeline output overlaid on the original broadcast feed (corner kick, SNGS-116)</sub></td>
+<td><sub>Pipeline output overlaid on the original broadcast feed (corner kick, SNGS-040)</sub></td>
 </tr>
 </table>
 
@@ -261,9 +261,11 @@ uv run jupyter nbconvert --to notebook --execute notebooks/03_evaluation_and_val
 uv run jupyter nbconvert --to notebook --execute notebooks/04_deployment_visualizations.ipynb --inplace
 
 # Optional: rendered annotated clips / PC overlays (video media; only the 2
-# representative clips (SNGS-116, SNGS-122) are committed, see Data & Licensing)
-uv run python scripts/render_annotated_clips.py
-uv run python scripts/render_pc_overlay.py
+# representative clips (SNGS-040, SNGS-066) are committed, see Data & Licensing)
+uv run python scripts/render_annotated_clips.py --clip SNGS-040
+uv run python scripts/render_annotated_clips.py --clip SNGS-066
+uv run python scripts/render_pc_overlay.py --clip SNGS-040
+uv run python scripts/render_pc_overlay.py --clip SNGS-066
 ```
 
 If you already have the private `homographies_tvcalib.parquet` locally, skip `run_tvcalib_batch.py` (and the TVCalib setup). Per-step detail follows below.
@@ -406,7 +408,7 @@ The code in this repository is MIT-licensed. Data redistribution follows guidanc
 - **SoccerNet GSR annotations** (`Labels-GameState.json`, `bbox_pitch`) are annotated by the SoccerNet team and open source ("do whatever you want with them"). Outputs derived solely from them - GT player detections, GT ball positions (`gt_ball_positions.parquet`), validation, ICC, set-pieces - are committed freely.
 - **Raw video-derived parquets are private and not in this repo.** `detections_soccana_tvcalib.parquet`, `ball_positions.parquet`, and `homographies_tvcalib.parquet` are produced directly from the NDA-protected video frames. SoccerNet confirmed (2026-06-01) that content derived from the copyrighted video carries the same copyright and may not be redistributed, so these three are gitignored and ship only in the closed university thesis submission.
 - **Aggregate Pitch Control outputs are committed** (`pitch_control_*`, `spatial_pc_error`). These are heavily transformed summary surfaces, shared for academic, non-commercial use only; they let the public analysis layer reproduce without the private inputs.
-- **Raw video is not redistributable** and is never committed. **Rendered annotated clips** (overlaying pipeline output on broadcast frames) are a narrower case: SoccerNet confirmed in writing (2026-06-01) that short (~5 s) academic, non-commercial clips are fair use. Two representative clips (`SNGS-116`, `SNGS-122`, ~4-5 s each) are committed in `outputs/figures/` as gif/mp4/still/annotated/overlay; the other 31 clips are not, to keep repo size reasonable.
+- **Raw video is not redistributable** and is never committed. **Rendered annotated clips** (overlaying pipeline output on broadcast frames) are a narrower case: SoccerNet confirmed in writing (2026-06-01) that short (~5 s) academic, non-commercial clips are fair use. Two representative clips (`SNGS-040`, `SNGS-066`, ~4-5 s each) are committed in `outputs/figures/` as gif/mp4/still/annotated/overlay; the other 31 clips are not, to keep repo size reasonable.
 
 Use is academic and non-commercial. See `LICENSE` for the code license.
 
