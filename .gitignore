@@ -60,6 +60,9 @@ outputs/homographies_tvcalib.parquet
 # Exploratory diagnostic scatters (regenerated on demand; not thesis artifacts).
 outputs/figures/diagnostics/
 
+# Hook clip: explanatory-video intro only, not a thesis deliverable.
+outputs/figures/hook/
+
 # SoccerNet video media (annotated clips/gifs/stills, ~4-5s, overlay on broadcast
 # frames): SoccerNet confirmed in writing (2026-06-01, Point 3) that short
 # (~5s) academic, non-commercial annotated clips are fair use and acceptable

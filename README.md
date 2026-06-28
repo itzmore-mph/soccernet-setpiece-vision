@@ -71,7 +71,8 @@ soccernet-setpiece-vision/
 │   ├── render_cohort_funnel.py   # Cohort-attrition funnel figure (33 clips → 21 ball-position → 651 PC frames)
 │   ├── render_gantt.py           # CRISP-DM Gantt timeline figure (report Section 4.2, Figure 1)
 │   ├── render_annotated_clips.py # Team-coloured player + orange referee bbox overlays to MP4
-│   └── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
+│   ├── render_pc_overlay.py      # PC heatmap overlay on broadcast frames
+│   └── run_full_deterministic.sh # Full from-scratch regen on CPU with fixed seeds (tvcalib -> ... -> notebooks)
 ├── tests/                        # pytest unit + property-based tests (hypothesis)
 ├── outputs/                      # Public numeric parquets committed; private video-derived ones gitignored
 │   ├── *.parquet                 # Committed (public): PC surfaces, validation, ICC, GT detections,
@@ -79,7 +80,8 @@ soccernet-setpiece-vision/
 │   │                             #   Soccana detections, pipeline ball positions, homographies
 │   └── figures/                  # Committed analysis/validation figures (PNG) plus 2 representative
 │                                 #   annotated clips (gif/mp4/still, annotated/, overlay/); SoccerNet
-│                                 #   confirmed short fair-use clips in writing, see Data & Licensing
+│                                 #   confirmed short fair-use clips in writing, see Data & Licensing.
+│                                 #   diagnostics/ (exploratory scatters) gitignored, not committed
 ├── pyproject.toml                # Project metadata + all dependencies (uv)
 ├── uv.lock                       # Fully pinned, platform-aware lockfile
 ├── .python-version               # Python 3.11
