@@ -8,7 +8,7 @@ chrome used in render_pc_overlay.py, since the hook needs to read at a
 glance, not like a dashboard.
 
 Usage:
-    python scripts/render_hook_clip.py --clip SNGS-116
+    python scripts/render_hook_clip.py --clip SNGS-110
 
 Requires the local SoccerNet GSR dataset (reads broadcast JPEGs).
 """
@@ -48,7 +48,7 @@ TARGET_ALPHA = 0.35  # final heatmap strength; lower than the dashboard variant 
 # open space) still show grass through instead of reading as a flat color block
 FADE_IN_FRAMES = 8  # source frames over which the heatmap ramps from 0 -> TARGET_ALPHA
 HOLD_BROADCAST_FRAMES = 3  # leading source frames shown with no heatmap at all
-PLAYER_DOT_RADIUS = 8
+PLAYER_MARKER_RADIUS = 18  # outer ring radius in px; was 8 (read as near-invisible specks on a 2680px-wide frame)
 TEAM_COLORS_BGR = {0: (220, 120, 20), 1: (20, 40, 220), 2: (30, 130, 255), -1: (100, 100, 100)}
 
 
@@ -70,15 +70,26 @@ def make_pc_colormap(pc_surface: np.ndarray) -> np.ndarray:
 
 
 def draw_players(frame: np.ndarray, dets: pd.DataFrame, H: np.ndarray, img_w: int, img_h: int) -> None:
-    """Small team-coloured dots at detected player positions, no labels."""
+    """Team-coloured ground markers at detected player positions: a soft drop shadow,
+    a translucent fill disc, and a crisp white ring, sized to read on a broadcast-resolution
+    frame instead of as flat specks."""
+    overlay = frame.copy()
     for _, row in dets.iterrows():
         cx = int((row["x1_px"] + row["x2_px"]) / 2)
         cy = int(row["y2_px"])
         if not (0 <= cx < img_w and 0 <= cy < img_h):
             continue
         color = TEAM_COLORS_BGR.get(int(row["team_kmeans"]), TEAM_COLORS_BGR[-1])
-        cv2.circle(frame, (cx, cy), PLAYER_DOT_RADIUS, (0, 0, 0), 2)
-        cv2.circle(frame, (cx, cy), PLAYER_DOT_RADIUS, color, -1)
+        cv2.ellipse(overlay, (cx, cy + 4), (PLAYER_MARKER_RADIUS, PLAYER_MARKER_RADIUS // 3),
+                    0, 0, 360, (0, 0, 0), -1)
+        cv2.circle(overlay, (cx, cy), PLAYER_MARKER_RADIUS, color, -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, dst=frame)
+    for _, row in dets.iterrows():
+        cx = int((row["x1_px"] + row["x2_px"]) / 2)
+        cy = int(row["y2_px"])
+        if not (0 <= cx < img_w and 0 <= cy < img_h):
+            continue
+        cv2.circle(frame, (cx, cy), PLAYER_MARKER_RADIUS, (255, 255, 255), 2)
 
 
 def warp_pc_to_image(pc_surface: np.ndarray, H_world_to_image: np.ndarray, img_w: int, img_h: int) -> np.ndarray:
@@ -117,7 +128,11 @@ def load_homography_lookup() -> dict[tuple[str, str, int], np.ndarray]:
 
 def render(clip_id: str, out_path: Path) -> int:
     dets_all = pd.read_parquet(OUTPUTS_DIR / "detections_soccana_tvcalib.parquet")
-    balls = pd.read_parquet(OUTPUTS_DIR / "ball_positions.parquet")
+    # GT ball, not the autonomous single resting-position estimate: this is a cold-open
+    # visual, not a validation figure, so it should show the ball actually moving frame to
+    # frame rather than one static point (which is also wrong for some clips, see SNGS-040).
+    gt_ball = pd.read_parquet(OUTPUTS_DIR / "gt_ball_positions.parquet")
+    gt_ball = gt_ball[gt_ball["clip_id"] == clip_id].set_index("frame_idx")
     H_lookup = load_homography_lookup()
 
     dets = dets_all[dets_all["clip_id"] == clip_id]
@@ -125,11 +140,11 @@ def render(clip_id: str, out_path: Path) -> int:
     clip_path = GSR_ROOT / split / clip_id
     frame_indices = sorted(dets["frame_idx"].unique())
 
-    ball_row = balls[balls["clip_id"] == clip_id]
-    x_col = "ball_x_m" if "ball_x_m" in ball_row.columns else "x_pitch"
-    y_col = "ball_y_m" if "ball_y_m" in ball_row.columns else "y_pitch"
-    ball_x = float(ball_row[x_col].iloc[0])
-    ball_y = float(ball_row[y_col].iloc[0])
+    def ball_xy_at(frame_idx: int) -> tuple[float, float] | None:
+        if frame_idx not in gt_ball.index:
+            return None
+        row = gt_ball.loc[frame_idx]
+        return float(row["ball_x_m"]), float(row["ball_y_m"])
 
     sample = cv2.imread(str(clip_path / "img1" / f"{frame_indices[0]:06d}.jpg"))
     img_h, img_w = sample.shape[:2]
@@ -148,16 +163,17 @@ def render(clip_id: str, out_path: Path) -> int:
 
         H = H_lookup.get((split, clip_id, fi))
         f_dets = dets[dets["frame_idx"] == fi]
+        ball_xy = ball_xy_at(fi)
 
         ramp = np.clip((idx - HOLD_BROADCAST_FRAMES) / FADE_IN_FRAMES, 0.0, 1.0)
         alpha_now = TARGET_ALPHA * ramp
 
-        if H is not None and alpha_now > 0 and not f_dets.empty:
+        if H is not None and alpha_now > 0 and not f_dets.empty and ball_xy is not None:
             players_xy = f_dets[["x_m", "y_m"]].to_numpy()
             teams = f_dets["team_kmeans"].to_numpy()
-            att_xy, def_xy, _ = split_attack_defend(players_xy, teams, (ball_x, ball_y))
+            att_xy, def_xy, _ = split_attack_defend(players_xy, teams, ball_xy)
             if len(att_xy) > 0 and len(def_xy) > 0:
-                pc = pitch_control_surface(att_xy, def_xy, (ball_x, ball_y))
+                pc = pitch_control_surface(att_xy, def_xy, ball_xy)
                 pc_warped = warp_pc_to_image(pc, H, img_w, img_h)
                 mask = np.clip(pc_warped.astype(np.float32).sum(axis=2) / 255.0, 0, 1)
                 mask_3ch = np.stack([mask] * 3, axis=2)
@@ -169,8 +185,8 @@ def render(clip_id: str, out_path: Path) -> int:
         if H is not None and not f_dets.empty:
             draw_players(frame, f_dets, H, img_w, img_h)
 
-        if H is not None and ball_x is not None:
-            ball_px = project_ball_to_image(ball_x, ball_y, H)
+        if H is not None and ball_xy is not None:
+            ball_px = project_ball_to_image(ball_xy[0], ball_xy[1], H)
             if ball_px is not None:
                 bx, by = int(ball_px[0]), int(ball_px[1])
                 if 0 <= bx < img_w and 0 <= by < img_h:
@@ -197,7 +213,7 @@ def render(clip_id: str, out_path: Path) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render clean cold-open hook clip")
-    parser.add_argument("--clip", default="SNGS-116")
+    parser.add_argument("--clip", default="SNGS-110")
     args = parser.parse_args()
     out_path = FIGURES_DIR / f"{args.clip}_hook.mp4"
     n = render(args.clip, out_path)
