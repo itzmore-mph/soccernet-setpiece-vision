@@ -81,11 +81,14 @@ references:
     year: 2022
 
   - type: software
-    title: "Ultralytics YOLOv8"
+    title: "Ultralytics YOLO11"
+    version: "11.0.0"
     authors:
       - family-names: Jocher
         given-names: Glenn
-    year: 2023
+      - family-names: Qiu
+        given-names: Jing
+    year: 2024
     repository-code: "https://github.com/ultralytics/ultralytics"
 
   - type: software
@@ -106,12 +109,25 @@ references:
     year: 2023
 
   - type: software
-    title: "Soccana: YOLOv11n football detector"
+    title: "Soccana: YOLO11n football detector"
+    version: "305936007fe7d19ea528d73d08ccd7e70d088adf"
     authors:
       - family-names: Jain
         given-names: Adit
-    year: 2024
+    year: 2025
     url: "https://huggingface.co/Adit-jain/soccana"
+    notes: "Fine-tuned checkpoint of the Ultralytics YOLO11 architecture; trained on the Adit-jain/Soccana_player_ball_detection_v1 dataset. Used at HuggingFace revision 305936007fe7d19ea528d73d08ccd7e70d088adf."
+    keywords:
+      - "base_model:Ultralytics/YOLO11"
+      - "dataset:Adit-jain/Soccana_player_ball_detection_v1"
+
+  - type: dataset
+    title: "Soccana player, ball, and referee detection (v1)"
+    authors:
+      - family-names: Jain
+        given-names: Adit
+    year: 2025
+    url: "https://huggingface.co/datasets/Adit-jain/Soccana_player_ball_detection_v1"
 
   - type: conference-paper
     title: "Beyond Expected Goals"
