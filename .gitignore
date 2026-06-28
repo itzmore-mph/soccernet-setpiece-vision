@@ -69,3 +69,4 @@ outputs/figures/hook/
 # to publish. Detection/ball/homography PARQUETS (numeric, video-derived) are
 # a separate case (Point 2) and stay gitignored above — this exemption is for
 # rendered media only.
+README.pdf
