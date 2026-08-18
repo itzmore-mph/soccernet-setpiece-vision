@@ -70,3 +70,4 @@ outputs/figures/hook/
 # a separate case (Point 2) and stay gitignored above — this exemption is for
 # rendered media only.
 README.pdf
+*.bak
