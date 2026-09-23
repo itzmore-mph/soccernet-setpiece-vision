@@ -124,6 +124,7 @@ def render_heatmap(cells: pd.DataFrame) -> None:
     grid = cells.pivot(index="iy", columns="ix", values="mean_abs_err").to_numpy()
     pitch = Pitch(pitch_type="custom", pitch_length=PITCH_LENGTH_M, pitch_width=PITCH_WIDTH_M, line_zorder=2)
     fig, ax = pitch.draw(figsize=(9, 6))
+    ax.invert_yaxis()  # SoccerNet y grows toward the main camera; match the broadcast view
     im = ax.imshow(
         grid,
         extent=(0, PITCH_LENGTH_M, 0, PITCH_WIDTH_M),
