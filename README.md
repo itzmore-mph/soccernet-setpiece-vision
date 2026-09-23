@@ -90,8 +90,6 @@ soccernet-setpiece-vision/
 └── LICENSE
 ```
 
-> The full report (`report.md`, plus its DOCX export) is a local drafting helper, not tracked in this repo. The formatted PDF/DOCX and the project proposal are delivered separately as the closed university submission. Only the TVCalib setup notes under `docs/tvcalib-setup/` are tracked here, since they document the external calibration step.
-
 ---
 
 ## Prerequisites
