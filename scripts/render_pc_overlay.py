@@ -7,14 +7,15 @@ broadcast footage — the most intuitive visualization of the pipeline output.
 
 Features:
 - Pitch control heatmap warped to broadcast perspective
-- Team-coloured player dots at detected positions
-- Ball marker
+- Player dots at detected foot positions, coloured by role (attacking/defending)
+- Ball marker (optional, see --no-ball)
 - pc_in_box metric bar at the bottom
 - Frame counter
 
 Usage:
     python scripts/render_pc_overlay.py                      # all clips
     python scripts/render_pc_overlay.py --clip SNGS-066      # single clip
+    python scripts/render_pc_overlay.py --no-ball            # skip the projected ball marker
 
 Requires the local SoccerNet GSR dataset (reads broadcast JPEGs).
 """
@@ -51,9 +52,12 @@ GRID_NX, GRID_NY = 60, 40
 FPS = 6
 ALPHA = 0.35  # heatmap transparency (lower = more broadcast visible)
 TEAM_COLORS_BGR = {0: (220, 80, 20), 1: (20, 60, 220), -1: (120, 120, 120)}
+# Dots coloured by role so they match the heatmap (blue = attacking, red = defending)
+ATTACK_COLOR_BGR = (220, 80, 20)
+DEFEND_COLOR_BGR = (20, 60, 220)
 BALL_COLOR_BGR = (0, 255, 255)  # yellow
 PLAYER_RADIUS_PX = 7  # at 1920x1080; small enough not to hide the heatmap under the player
-BALL_RADIUS_PX = 8
+BALL_RADIUS_PX = 14  # hollow ring, wider than the ball so it frames it
 
 
 def load_homography_lookup() -> dict[tuple[str, str, int], np.ndarray]:
@@ -216,18 +220,30 @@ def draw_players_and_ball(
     frame: np.ndarray,
     dets: pd.DataFrame,
     ball_xy_px: tuple[float, float] | None,
+    att_team: object = None,
 ) -> None:
-    """Draw player circles and ball on the frame."""
+    """Draw player circles and ball on the frame.
+
+    With ``att_team`` set, players are coloured by role (attacking/defending) to
+    match the heatmap; otherwise by raw KMeans team label.
+    """
     for _, row in dets.iterrows():
         cx = int((row["x1_px"] + row["x2_px"]) / 2)
         cy = int(row["y2_px"])  # foot position
         team = int(row["team_kmeans"])
-        color = TEAM_COLORS_BGR.get(team, TEAM_COLORS_BGR[-1])
+        if team == -1:
+            color = TEAM_COLORS_BGR[-1]
+        elif att_team is not None:
+            color = ATTACK_COLOR_BGR if team == att_team else DEFEND_COLOR_BGR
+        else:
+            color = TEAM_COLORS_BGR.get(team, TEAM_COLORS_BGR[-1])
         _draw_marker(frame, (cx, cy), PLAYER_RADIUS_PX, color)
 
     if ball_xy_px is not None:
         bx, by = int(ball_xy_px[0]), int(ball_xy_px[1])
-        _draw_marker(frame, (bx, by), BALL_RADIUS_PX, BALL_COLOR_BGR)
+        # Hollow ring so the real ball stays visible underneath
+        cv2.circle(frame, (bx, by), BALL_RADIUS_PX, (0, 0, 0), 4, cv2.LINE_AA)  # dark halo
+        cv2.circle(frame, (bx, by), BALL_RADIUS_PX, BALL_COLOR_BGR, 2, cv2.LINE_AA)
 
 
 def _draw_marker(frame: np.ndarray, centre: tuple[int, int], radius: int, color: tuple[int, int, int]) -> None:
@@ -260,8 +276,15 @@ def render_clip(
     balls: pd.DataFrame,
     H_lookup: dict,
     out_path: Path,
+    draw_ball: bool = True,
 ) -> int:
-    """Render one clip with PC overlay."""
+    """Render one clip with PC overlay.
+
+    ``draw_ball=False`` skips the ball marker. The ball is a fixed pitch point
+    re-projected with each frame's own homography, so per-frame calibration
+    noise makes it jump (worst near the image edge, e.g. corners). It is still
+    used for the Pitch Control computation.
+    """
     clip_path = GSR_ROOT / split / clip_id
     if not clip_path.is_dir():
         print(f"  [skip] {clip_id}: clip dir not found")
@@ -315,10 +338,11 @@ def render_clip(
             ball_y = None
 
         # Compute pitch control
+        att_team = None
         if not f_dets.empty and ball_x is not None:
             players_xy = f_dets[["x_m", "y_m"]].to_numpy()
             teams = f_dets["team_kmeans"].to_numpy()
-            att_xy, def_xy, _ = split_attack_defend(players_xy, teams, (ball_x, ball_y))
+            att_xy, def_xy, att_team = split_attack_defend(players_xy, teams, (ball_x, ball_y))
 
             if len(att_xy) > 0 and len(def_xy) > 0:
                 pc = pitch_control_surface(att_xy, def_xy, (ball_x, ball_y))
@@ -349,8 +373,8 @@ def render_clip(
                 draw_metric_bar(frame, pc_in_box, pc_at_ball)
 
         # Draw players and ball
-        ball_px = project_ball_to_image(ball_x, ball_y, H) if ball_x is not None else None
-        draw_players_and_ball(frame, f_dets, ball_px)
+        ball_px = project_ball_to_image(ball_x, ball_y, H) if (draw_ball and ball_x is not None) else None
+        draw_players_and_ball(frame, f_dets, ball_px, att_team)
 
         # Frame label
         action = f_dets["action_class"].iloc[0] if not f_dets.empty else ""
@@ -377,6 +401,7 @@ def render_clip(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Render pitch control overlay on broadcast frames")
     parser.add_argument("--clip", default=None, help="Single clip ID, e.g. SNGS-066")
+    parser.add_argument("--no-ball", action="store_true", help="Do not draw the projected ball marker")
     args = parser.parse_args()
 
     print("Loading data...")
@@ -399,7 +424,7 @@ def main() -> None:
         split = clip_dets["split"].iloc[0]
         action = clip_dets["action_class"].iloc[0]
         out_path = FIGURES_DIR / f"{clip_id}_pc_overlay.mp4"
-        n = render_clip(clip_id, split, clip_dets, balls, H_lookup, out_path)
+        n = render_clip(clip_id, split, clip_dets, balls, H_lookup, out_path, draw_ball=not args.no_ball)
         if n:
             print(f"  {clip_id} ({action}): {n} frames → {out_path.relative_to(PROJECT_ROOT)}")
 

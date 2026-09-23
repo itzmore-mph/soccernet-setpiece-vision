@@ -9,6 +9,7 @@ and writes one MP4 per clip to outputs/figures/annotated/.
 Usage:
     python scripts/render_annotated_clips.py                      # all clips
     python scripts/render_annotated_clips.py --clip SNGS-066      # one clip
+    python scripts/render_annotated_clips.py --no-ball            # skip the projected ball ring
 """
 
 from __future__ import annotations
@@ -42,6 +43,8 @@ REFEREE_COLOR = (30, 130, 255)  # orange
 TEAM_NAMES = {0: "Team A", 1: "Team B", 2: "Other", -1: "?"}
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 FPS = 8
+BALL_COLOR = (0, 255, 255)  # yellow
+BALL_RING_RADIUS_PX = 14  # hollow ring, wider than the ball so it frames it
 
 
 def discover_clip_path(clip_id: str) -> Path | None:
@@ -109,13 +112,18 @@ def project_ball_to_image(ball_x_m: float, ball_y_m: float, H_world_to_image: np
 
 
 def draw_ball(frame: np.ndarray, ball_xy_px: tuple[float, float]) -> None:
+    """Draw a hollow ring at the projected set-piece ball position.
+
+    Hollow so the real ball stays visible underneath: the ring marks the
+    clip-level estimate re-projected with each frame's homography, not a
+    per-frame detection, so any offset from the real ball stays visible.
+    """
     bx, by = int(ball_xy_px[0]), int(ball_xy_px[1])
     h, w = frame.shape[:2]
     if not (0 <= bx < w and 0 <= by < h):
         return
-    cv2.circle(frame, (bx, by), 10, (0, 0, 0), 3)
-    cv2.circle(frame, (bx, by), 10, (0, 255, 255), -1)
-    cv2.circle(frame, (bx, by), 10, (255, 255, 255), 1)
+    cv2.circle(frame, (bx, by), BALL_RING_RADIUS_PX, (0, 0, 0), 4, cv2.LINE_AA)  # dark halo
+    cv2.circle(frame, (bx, by), BALL_RING_RADIUS_PX, BALL_COLOR, 2, cv2.LINE_AA)
 
 
 def draw_detection_box(
@@ -267,6 +275,7 @@ def render_clip(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--clip", default=None, help="single clip ID, e.g. SNGS-066")
+    parser.add_argument("--no-ball", action="store_true", help="do not draw the projected ball ring")
     args = parser.parse_args()
 
     parquet_path = OUTPUTS_DIR / "detections_soccana_tvcalib.parquet"
@@ -291,7 +300,7 @@ def main() -> None:
     verify_soccernet_data()
 
     balls_path = OUTPUTS_DIR / "ball_positions.parquet"
-    balls = pd.read_parquet(balls_path) if balls_path.is_file() else None
+    balls = pd.read_parquet(balls_path) if (balls_path.is_file() and not args.no_ball) else None
     H_lookup = load_homography_lookup() if (OUTPUTS_DIR / "homographies_tvcalib.parquet").is_file() else None
 
     for clip_id in clip_ids:
