@@ -9,7 +9,8 @@ Features:
 - Pitch control heatmap warped to broadcast perspective
 - Player dots at detected foot positions, coloured by role (attacking/defending)
 - Ball marker (optional, see --no-ball)
-- pc_in_box metric bar at the bottom
+- pc_in_box metric bar at the bottom, with the data-source credit
+- Legend (attacking / defending / contested / referee)
 - Frame counter
 
 Usage:
@@ -50,12 +51,15 @@ GSR_ROOT = verify_soccernet_data(str(PROJECT_ROOT / ".env"))
 # Visualization parameters
 GRID_NX, GRID_NY = 60, 40
 FPS = 6
-ALPHA = 0.35  # heatmap transparency (lower = more broadcast visible)
+ALPHA = 0.45  # heatmap transparency (lower = more broadcast visible)
+DESATURATE = 0.85  # how far controlled areas are pulled toward grey before tinting
 TEAM_COLORS_BGR = {0: (220, 80, 20), 1: (20, 60, 220), -1: (120, 120, 120)}
 # Dots coloured by role so they match the heatmap (blue = attacking, red = defending)
 ATTACK_COLOR_BGR = (220, 80, 20)
 DEFEND_COLOR_BGR = (20, 60, 220)
 BALL_COLOR_BGR = (0, 255, 255)  # yellow
+CONTESTED_BAND = 0.15  # |pc - 0.5| below this gets no overlay at all (see make_pc_colormap)
+SOURCE_TEXT = "SoccerNet GSR, licensed for research use"
 PLAYER_RADIUS_PX = 7  # at 1920x1080; small enough not to hide the heatmap under the player
 BALL_RADIUS_PX = 14  # hollow ring, wider than the ball so it frames it
 
@@ -80,16 +84,22 @@ def make_pc_colormap(pc_surface: np.ndarray) -> np.ndarray:
     """Convert pitch control [0,1] array to BGR colormap image with alpha.
 
     0.0 = full red (defending), 0.5 = transparent, 1.0 = full blue (attacking).
-    Areas near 0.5 are nearly transparent to avoid flooding the frame.
+
+    Cells within ``CONTESTED_BAND`` of 0.5 are fully transparent. Without that
+    deadband, weak red over green grass blends to olive/yellow-green and weak blue
+    blends to grey-blue, i.e. colours that are not in the legend and that a viewer
+    cannot map back to a team. The band makes "contested" read as plain grass.
     """
     ny, nx = pc_surface.shape
     img = np.zeros((ny, nx, 3), dtype=np.uint8)
 
     pc_clipped = np.clip(pc_surface, 0, 1)
 
-    # Intensity ramps from 0 at 0.5 to 1 at extremes, with power curve for contrast
-    att_raw = np.where(pc_clipped > 0.5, (pc_clipped - 0.5) * 2.0, 0.0)
-    def_raw = np.where(pc_clipped < 0.5, (0.5 - pc_clipped) * 2.0, 0.0)
+    # Intensity ramps from 0 at the band edge to 1 at the extremes, power curve for contrast
+    deviation = np.abs(pc_clipped - 0.5)
+    ramp = np.clip((deviation - CONTESTED_BAND) / (0.5 - CONTESTED_BAND), 0.0, 1.0)
+    att_raw = np.where(pc_clipped > 0.5, ramp, 0.0)
+    def_raw = np.where(pc_clipped < 0.5, ramp, 0.0)
     att_intensity = np.power(att_raw, 1.5)
     def_intensity = np.power(def_raw, 1.5)
 
@@ -214,6 +224,64 @@ def draw_metric_bar(frame: np.ndarray, pc_in_box: float, pc_at_ball: float) -> N
         1,
         cv2.LINE_AA,
     )
+
+    # Source credit, right-aligned in the same bar
+    (src_w, _), _ = cv2.getTextSize(SOURCE_TEXT, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
+    cv2.putText(
+        frame,
+        SOURCE_TEXT,
+        (w - src_w - 20, bar_y + 24),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.45,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA,
+    )
+
+
+def draw_legend(frame: np.ndarray) -> None:
+    """Draw a top-right legend covering every colour the frame can show.
+
+    Includes the contested band and the referee marker: referees carry team -1 and
+    are excluded from the pitch control computation (see ``split_attack_defend``),
+    so their grey dot must not be mistaken for a team colour.
+    """
+    entries = [
+        ("Attacking control", ATTACK_COLOR_BGR),
+        ("Defending control", DEFEND_COLOR_BGR),
+        (f"Contested (|PC-0.5| < {CONTESTED_BAND:g})", None),
+        ("Referee (excluded from PC)", TEAM_COLORS_BGR[-1]),
+    ]
+    font, scale, thick = cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+    pad, swatch, line_h = 10, 16, 26
+    text_w = max(cv2.getTextSize(label, font, scale, thick)[0][0] for label, _ in entries)
+    box_w = swatch + 8 + text_w + 2 * pad
+    box_h = line_h * len(entries) + 2 * pad - 6
+    x0 = frame.shape[1] - box_w - 20
+    y0 = 20
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (x0, y0), (x0 + box_w, y0 + box_h), (0, 0, 0), -1)
+    cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
+
+    for i, (label, color) in enumerate(entries):
+        sy = y0 + pad + i * line_h
+        sx = x0 + pad
+        if color is None:
+            # No fill: contested cells are left as bare broadcast pixels
+            cv2.rectangle(frame, (sx, sy), (sx + swatch, sy + swatch), (200, 200, 200), 1, cv2.LINE_AA)
+        else:
+            cv2.rectangle(frame, (sx, sy), (sx + swatch, sy + swatch), color, -1)
+        cv2.putText(
+            frame,
+            label,
+            (sx + swatch + 8, sy + swatch - 2),
+            font,
+            scale,
+            (255, 255, 255),
+            thick,
+            cv2.LINE_AA,
+        )
 
 
 def draw_players_and_ball(
@@ -356,10 +424,16 @@ def render_clip(
                 mask = np.clip(mask, 0, 1)
                 mask_3ch = np.stack([mask] * 3, axis=2)
 
-                # Alpha blend with intensity-weighted transparency
+                # Desaturate the grass where the overlay is strong, then tint.
+                # Additive blending alone does not work on a green pitch: red over green
+                # reads as olive/yellow, which no legend entry describes. Pulling the
+                # underlying pixels toward luminance first lets red read as red and blue
+                # as blue, while contested areas (mask 0) keep the untouched broadcast.
                 frame_float = frame.astype(np.float32)
                 pc_float = pc_warped.astype(np.float32)
-                blended = frame_float * (1 - ALPHA * mask_3ch) + pc_float * (ALPHA * mask_3ch)
+                luma = frame_float.mean(axis=2, keepdims=True)
+                base = frame_float * (1 - DESATURATE * mask_3ch) + luma * (DESATURATE * mask_3ch)
+                blended = base * (1 - ALPHA * mask_3ch) + pc_float * (ALPHA * mask_3ch)
                 frame = blended.astype(np.uint8)
 
                 # Metrics
@@ -375,6 +449,7 @@ def render_clip(
         # Draw players and ball
         ball_px = project_ball_to_image(ball_x, ball_y, H) if (draw_ball and ball_x is not None) else None
         draw_players_and_ball(frame, f_dets, ball_px, att_team)
+        draw_legend(frame)
 
         # Frame label
         action = f_dets["action_class"].iloc[0] if not f_dets.empty else ""
