@@ -52,6 +52,8 @@ FPS = 6
 ALPHA = 0.35  # heatmap transparency (lower = more broadcast visible)
 TEAM_COLORS_BGR = {0: (220, 80, 20), 1: (20, 60, 220), -1: (120, 120, 120)}
 BALL_COLOR_BGR = (0, 255, 255)  # yellow
+PLAYER_RADIUS_PX = 7  # at 1920x1080; small enough not to hide the heatmap under the player
+BALL_RADIUS_PX = 8
 
 
 def load_homography_lookup() -> dict[tuple[str, str, int], np.ndarray]:
@@ -221,15 +223,18 @@ def draw_players_and_ball(
         cy = int(row["y2_px"])  # foot position
         team = int(row["team_kmeans"])
         color = TEAM_COLORS_BGR.get(team, TEAM_COLORS_BGR[-1])
-        cv2.circle(frame, (cx, cy), 12, (0, 0, 0), 3)  # black outline
-        cv2.circle(frame, (cx, cy), 12, color, -1)  # filled
-        cv2.circle(frame, (cx, cy), 12, (255, 255, 255), 2)  # white ring
+        _draw_marker(frame, (cx, cy), PLAYER_RADIUS_PX, color)
 
     if ball_xy_px is not None:
         bx, by = int(ball_xy_px[0]), int(ball_xy_px[1])
-        cv2.circle(frame, (bx, by), 14, (0, 0, 0), 3)
-        cv2.circle(frame, (bx, by), 14, BALL_COLOR_BGR, -1)
-        cv2.circle(frame, (bx, by), 14, (255, 255, 255), 2)
+        _draw_marker(frame, (bx, by), BALL_RADIUS_PX, BALL_COLOR_BGR)
+
+
+def _draw_marker(frame: np.ndarray, centre: tuple[int, int], radius: int, color: tuple[int, int, int]) -> None:
+    """Filled dot with a thin white ring and dark edge, anti-aliased."""
+    cv2.circle(frame, centre, radius + 1, (0, 0, 0), -1, cv2.LINE_AA)  # dark edge
+    cv2.circle(frame, centre, radius, (255, 255, 255), -1, cv2.LINE_AA)  # white ring
+    cv2.circle(frame, centre, radius - 2, color, -1, cv2.LINE_AA)  # fill
 
 
 def project_ball_to_image(ball_x_m: float, ball_y_m: float, H_world_to_image: np.ndarray) -> tuple[float, float] | None:
