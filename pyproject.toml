@@ -23,6 +23,8 @@ dependencies = [
     "matplotlib>=3.8.0",
     "seaborn>=0.13.0",
     "mplsoccer>=1.4.0",
+    # Bundled ffmpeg for H.264/yuv420p MP4 export (cv2 VideoWriter cannot guarantee it)
+    "imageio-ffmpeg>=0.5.1",
     # StatsBomb data
     "statsbombpy>=1.14.0",
     # SoccerNet GSR data download
