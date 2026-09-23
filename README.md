@@ -24,7 +24,7 @@ Author: Moritz Philipp Haaf, BSc MA
 
 **Results at a glance**: 
 
-33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames after ball-position filtering): ICC(2,1) = **0.89–0.93** across all five Pitch Control metrics, clip-level bias confirmed via bootstrap CI + Wilcoxon signed-rank test. All committed numbers are bit-reproducible on CPU with fixed seeds (`_pipeline_core.set_deterministic`).
+33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames). Pitch Control distributions are reproduced reasonably well at cohort level. Clip-level ranking agreement is weak, and pc_in_box shows a sign inversion in the penalty area (clip-level bias +0.20). Frames within a clip are highly correlated (ICC(2,1) 0.89 to 0.93), so inference is done at clip level, about 22 to 24 effective observations. All committed numbers are bit-reproducible on CPU with fixed seeds.
 
 ---
 
