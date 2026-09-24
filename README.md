@@ -6,6 +6,8 @@ Master's Final Project, MSc AI Applied to Sports, Sports Data Campus
 
 Author: Moritz Philipp Haaf, BSc MA
 
+> **Continued in a separate repository, `broadcast-football-cv`.** This repo is frozen at tag `v1.0-thesis` as the graded reference; further development of the pipeline happens there.
+
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/managed%20by-uv-DE5FE9?logo=uv&logoColor=white)](https://docs.astral.sh/uv/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-CPU%20deterministic-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
