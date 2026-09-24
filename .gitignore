@@ -28,9 +28,6 @@ change_ledger.md
 pyrightconfig.json
 .claude/
 
-# Report drafting helper, not a repo deliverable (report.md is the committed thesis)
-report.docx
-
 # Conda / venv (env lives in py311-dev outside repo)
 .venv/
 venv/
@@ -61,12 +58,4 @@ outputs/figures/diagnostics/
 
 # Hook clip: explanatory-video intro only, not a thesis deliverable.
 outputs/figures/hook/
-
-# SoccerNet video media (annotated clips/gifs/stills, ~4-5s, overlay on broadcast
-# frames): SoccerNet confirmed in writing (2026-06-01, Point 3) that short
-# (~5s) academic, non-commercial annotated clips are fair use and acceptable
-# to publish. Detection/ball/homography PARQUETS (numeric, video-derived) are
-# a separate case (Point 2) and stay gitignored above — this exemption is for
-# rendered media only.
-README.pdf
 *.bak
