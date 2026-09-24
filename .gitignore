@@ -28,8 +28,7 @@ change_ledger.md
 pyrightconfig.json
 .claude/
 
-# Report drafting helpers, not repo deliverables
-report.md
+# Report drafting helper, not a repo deliverable (report.md is the committed thesis)
 report.docx
 
 # Conda / venv (env lives in py311-dev outside repo)

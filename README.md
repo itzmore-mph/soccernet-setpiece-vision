@@ -22,6 +22,8 @@ Author: Moritz Philipp Haaf, BSc MA
 </tr>
 </table>
 
+**Thesis:** the full graded report is in [report.md](report.md). The original graded PDF is attached to the [v1.0-thesis release](https://github.com/itzmore-mph/soccernet-setpiece-vision/releases/download/v1.0-thesis/report.pdf).
+
 **Results at a glance**: 
 
 33 set-piece clips (corners + direct free kicks), 21 validated against SoccerNet GSR ground truth (651 PC frames). Pitch Control distributions are reproduced reasonably well at cohort level. Clip-level ranking agreement is weak, and pc_in_box shows a sign inversion in the penalty area (clip-level bias +0.20). Frames within a clip are highly correlated (ICC(2,1) 0.89 to 0.93), so inference is done at clip level, about 22 to 24 effective observations. All committed numbers are bit-reproducible on CPU with fixed seeds.
@@ -86,6 +88,7 @@ soccernet-setpiece-vision/
 ├── uv.lock                       # Fully pinned, platform-aware lockfile
 ├── .python-version               # Python 3.11
 ├── .env.example                  # Template for SOCCERNET_PASSWORD / SOCCERNET_LOCAL_DIR
+├── report.md                     # Graded thesis (Markdown rendition of the submitted PDF)
 ├── CITATION.cff
 └── LICENSE
 ```
@@ -410,7 +413,7 @@ The code in this repository is MIT-licensed. Data redistribution follows guidanc
 - **Aggregate Pitch Control outputs are committed** (`pitch_control_*`, `spatial_pc_error`). These are heavily transformed summary surfaces, shared for academic, non-commercial use only; they let the public analysis layer reproduce without the private inputs.
 - **Raw video is not redistributable** and is never committed. **Rendered annotated clips** (overlaying pipeline output on broadcast frames) are a narrower case: SoccerNet confirmed in writing (2026-06-01) that short (~5 s) academic, non-commercial clips are fair use. Two representative clips (`SNGS-110`, `SNGS-066`, ~4-5 s each) are committed in `outputs/figures/` as gif/mp4/still/annotated/overlay; the other 31 clips are not, to keep repo size reasonable. Earlier revisions in the git history contain three further short clips (`SNGS-040`, `SNGS-116`, `SNGS-122`) that were since removed from the tree; they fall under the same academic, non-commercial fair-use terms.
 
-Use is academic and non-commercial. See `LICENSE` for the code license.
+Use is academic and non-commercial. See `LICENSE` for the code license. The thesis text in `report.md` is not covered by the MIT license; its copyright remains with the author.
 
 ---
 
